@@ -1,0 +1,225 @@
+// Everything the sidebar webview draws, as plain JSON. Built from the normalized model plus
+// what only the extension knows (git, mounted folders, attached terminals, pane activity).
+// The webview (media/panel.js) only renders this; it never talks to Herdr.
+// No vscode imports (tested standalone).
+
+import * as os from 'os';
+import type { PaneActivity } from './activity';
+import type { ProviderUsage } from './usage';
+import type { GitInfo } from './gitInfo';
+import type { AgentStatus, Model, Pane, Space, Tab } from './model';
+import { agentTitle } from './herdrActions';
+
+export interface PaneView {
+  id: string;
+  spaceId: string;
+  kind: 'agent' | 'shell';
+  /** Agents: "Claude", "Kiro", or Herdr's display name. Shells: pane label, tab name or command. */
+  name: string;
+  /** Agents: task / terminal title. Shells: unused (see shell). */
+  detail?: string;
+  /** Agents only. */
+  status?: AgentStatus;
+  stateLabel?: string;
+  agentKind?: string;
+  /** Epoch ms the agent entered its current status (observed locally). */
+  since?: number;
+  /** Herdr's focused pane. */
+  focused: boolean;
+  /** An attach terminal for this pane is open in VS Code. */
+  attached: boolean;
+  /** Tab label when it adds information (not a bare number, not equal to the name). */
+  tab?: string;
+  /** Extra metadata worth a chip: model, $tokens. */
+  chips: string[];
+  /** Agents: one-line summary of the latest reply (Claude's "※ recap", else the last line). */
+  headline?: string;
+  /** Agents needing attention: the last lines of their screen. */
+  preview: string[];
+  shell?: {
+    state: 'prompt' | 'running' | 'unknown';
+    command?: string;
+    typed?: string;
+    output: string[];
+    failed: boolean;
+    changedAt?: number;
+  };
+  cwd?: string;
+}
+
+export interface SpaceView {
+  id: string;
+  label: string;
+  /** cwd with the home directory shortened to ~ */
+  path?: string;
+  status?: AgentStatus;
+  /** Herdr's focused workspace. */
+  focused: boolean;
+  /** Mounted as a folder in this VS Code window. */
+  mounted: boolean;
+  counts: Record<AgentStatus, number>;
+  git?: GitInfo;
+  worktree: boolean;
+  tokens: string[];
+  agents: PaneView[];
+  shells: PaneView[];
+}
+
+export interface ViewState {
+  connected: boolean;
+  showShells: boolean;
+  totals: Record<AgentStatus, number> & { agents: number; shells: number };
+  /** Blocked agents first, then done; oldest first within each. */
+  attention: PaneView[];
+  spaces: SpaceView[];
+  /** Plan usage of the coding agents with local data (Claude Code, Codex, Kiro). */
+  usage: ProviderUsage[];
+}
+
+export interface ViewInputs {
+  model?: Model;
+  showShells: boolean;
+  since(paneId: string): number | undefined;
+  git(cwd: string | undefined): GitInfo | undefined;
+  mounted(space: Space): boolean;
+  attached(paneId: string): boolean;
+  activity(paneId: string): PaneActivity | undefined;
+  usage: ProviderUsage[];
+}
+
+const home = os.homedir();
+const tilde = (p?: string) => (p && home && (p === home || p.startsWith(home + '/')) ? '~' + p.slice(home.length) : p);
+const emptyCounts = (): Record<AgentStatus, number> => ({ idle: 0, working: 0, blocked: 0, done: 0, unknown: 0 });
+const meaningfulTab = (tab: Tab | undefined, name: string) =>
+  tab && !/^\d+$/.test(tab.label) && tab.label !== name ? tab.label : undefined;
+
+/**
+ * Claude prints "※ recap: ..." hard-wrapped over several lines; otherwise use the last line,
+ * pulling in the line before when the last one is a wrapped continuation (starts lowercase).
+ */
+export function headline(lines: string[]): string | undefined {
+  const i = lines.map((l) => l.trimStart().startsWith('※ recap:')).lastIndexOf(true);
+  if (i >= 0)
+    return lines
+      .slice(i)
+      .map((l) => l.trim())
+      .join(' ')
+      .replace(/^※ recap:\s*/, '');
+  // Skip timing lines like "✻ Churned for 5s · done 12:18 PM": they say when, not what.
+  const content = lines.filter((l) => !STATUS_LINE.test(l.trim()));
+  const last = content[content.length - 1]?.trim();
+  if (last && /^[a-z]/.test(last) && content.length > 1) return `${content[content.length - 2].trim()} ${last}`;
+  return last || lines[lines.length - 1]?.trim() || undefined;
+}
+
+/** An agent's "<glyph> <Verb>ed for 1m 59s · done …" status line. */
+const STATUS_LINE = /^[^\w\s]\s+\w+ for \d+[smh]\b/;
+
+/**
+ * The pane's name in the sidebar and on its VS Code terminal tab (they must match).
+ * Agents: Herdr's display name, else the agent kind ("Claude"). Shells: the pane label, else the
+ * tab label, else "Tab N" for Herdr's numbered tabs. Only snapshot fields, so it doesn't change
+ * under a terminal tab that VS Code can't rename.
+ */
+export function paneName(tab: Tab | undefined, p: Pane): string {
+  if (p.isAgent) {
+    const a = p.raw.agent;
+    if (a?.display_agent) return a.display_agent;
+    const kind = p.agentKind;
+    // Names we generate ("claude", "claude-2") read better as "Claude", "Claude 2".
+    const generated = a?.name && kind ? new RegExp(`^${kind.replace(/[^a-z0-9_-]/gi, '')}(?:-(\\d+))?$`).exec(a.name) : null;
+    if (a?.name && !generated) return a.name;
+    const title = kind ? agentTitle(kind) : p.label;
+    return generated?.[1] ? `${title} ${generated[1]}` : title;
+  }
+  if (p.raw.pane?.label) return p.raw.pane.label;
+  if (!tab) return 'shell';
+  return /^\d+$/.test(tab.label) ? `Tab ${tab.label}` : tab.label;
+}
+
+function agentView(space: Space, tab: Tab | undefined, p: Pane, i: ViewInputs): PaneView {
+  const kind = p.agentKind;
+  const name = paneName(tab, p);
+  // Terminal titles are often just "kiro: ~/path" — the path adds nothing next to the space.
+  let detail = p.title ?? p.terminalTitle;
+  if (detail && kind && detail.toLowerCase().startsWith(kind.toLowerCase() + ':')) detail = detail.slice(kind.length + 1).trim();
+  if (detail && (/^[~/]/.test(detail) || detail === name)) detail = undefined;
+  const act = i.activity(p.id);
+  const lines = act?.output ?? [];
+  const status = p.status ?? 'unknown';
+  return {
+    id: p.id,
+    spaceId: space.id,
+    kind: 'agent',
+    name,
+    detail,
+    status,
+    stateLabel: p.stateLabel,
+    agentKind: kind,
+    since: i.since(p.id),
+    focused: p.focused,
+    attached: i.attached(p.id),
+    tab: meaningfulTab(tab, name),
+    chips: [p.tokens.model, ...Object.entries(p.tokens).filter(([k]) => k !== 'model').map(([, v]) => v)].filter(
+      (x): x is string => !!x,
+    ),
+    headline: headline(lines),
+    preview: status === 'blocked' ? lines.slice(-5) : status === 'done' ? lines.slice(-3) : [],
+    cwd: tilde(p.cwd),
+  };
+}
+
+function shellView(space: Space, tab: Tab | undefined, p: Pane, i: ViewInputs): PaneView {
+  const act = i.activity(p.id);
+  const name = paneName(tab, p);
+  return {
+    id: p.id,
+    spaceId: space.id,
+    kind: 'shell',
+    name,
+    focused: p.focused,
+    attached: i.attached(p.id),
+    tab: meaningfulTab(tab, name),
+    chips: Object.values(p.tokens),
+    preview: [],
+    shell: act
+      ? { state: act.state ?? 'unknown', command: act.command, typed: act.typed, output: act.output, failed: act.failed, changedAt: act.changedAt }
+      : { state: 'unknown', output: [], failed: false },
+    cwd: tilde(p.cwd),
+  };
+}
+
+export function buildViewState(i: ViewInputs): ViewState {
+  const totals = { ...emptyCounts(), agents: 0, shells: 0 };
+  const spaces: SpaceView[] = (i.model?.spaces ?? []).map((sp) => {
+    const agents: PaneView[] = [];
+    const shells: PaneView[] = [];
+    for (const tab of sp.tabs)
+      for (const p of tab.panes) (p.isAgent ? agents : shells).push(p.isAgent ? agentView(sp, tab, p, i) : shellView(sp, tab, p, i));
+    for (const a of agents) totals[a.status ?? 'unknown']++;
+    totals.agents += agents.length;
+    totals.shells += shells.length;
+    return {
+      id: sp.id,
+      label: sp.label,
+      path: tilde(sp.cwd),
+      status: sp.status,
+      focused: sp.focused,
+      mounted: i.mounted(sp),
+      counts: { ...sp.counts },
+      git: i.git(sp.cwd),
+      worktree: !!sp.worktree?.is_linked_worktree,
+      tokens: Object.values(sp.tokens),
+      agents,
+      shells: i.showShells ? shells : [],
+    };
+  });
+  const rank: Partial<Record<AgentStatus, number>> = { blocked: 0, done: 1 };
+  const attention = spaces
+    .flatMap((s) => s.agents)
+    .filter((a) => a.status === 'blocked' || a.status === 'done')
+    .sort((a, b) => rank[a.status!]! - rank[b.status!]! || (a.since ?? 0) - (b.since ?? 0));
+  // Usage only for the agents running in Herdr right now.
+  const running = new Set(spaces.flatMap((s) => s.agents.map((a) => (a.agentKind ?? '').toLowerCase())));
+  return { connected: !!i.model, showShells: i.showShells, totals, attention, spaces, usage: i.usage.filter((u) => running.has(u.id)) };
+}

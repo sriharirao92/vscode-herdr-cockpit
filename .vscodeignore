@@ -1,0 +1,10 @@
+src/**
+out/test/**
+**/*.map
+tsconfig.json
+node_modules/**
+CLAUDE.md
+.vscode/**
+.gitignore
+scripts/**
+test/**

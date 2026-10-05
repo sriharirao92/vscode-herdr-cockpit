@@ -1,0 +1,440 @@
+{
+  "name": "herdr-bridge",
+  "displayName": "Herdr Bridge",
+  "description": "Herdr spaces and agents inside one VS Code window: switch spaces, attach agents as editor tabs, review agent changes.",
+  "version": "0.0.16",
+  "publisher": "srihari-local",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sriharirao92/herdr-hub.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "herdr",
+          "title": "Herdr",
+          "icon": "media/herdr.svg"
+        }
+      ]
+    },
+    "views": {
+      "herdr": [
+        {
+          "type": "webview",
+          "id": "herdr.spaces",
+          "name": "Spaces & Agents"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "herdr.refresh",
+        "title": "Refresh",
+        "category": "Herdr",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "herdr.switchSpace",
+        "title": "Switch to Space",
+        "category": "Herdr",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "herdr.pinSpace",
+        "title": "Mount Space Alongside (Pin)",
+        "category": "Herdr",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "herdr.unmountSpace",
+        "title": "Unmount Space",
+        "category": "Herdr",
+        "icon": "$(close)"
+      },
+      {
+        "command": "herdr.attach",
+        "title": "Attach Terminal",
+        "category": "Herdr",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "herdr.reviewChanges",
+        "title": "Review Agent Changes",
+        "category": "Herdr",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "herdr.focusAttention",
+        "title": "Jump to Agent Needing Attention",
+        "category": "Herdr"
+      },
+      {
+        "command": "herdr.openTui",
+        "title": "Open Full Herdr TUI in Editor",
+        "category": "Herdr",
+        "icon": "$(window)"
+      },
+      {
+        "command": "herdr.setupHub",
+        "title": "Set up Herdr Hub Window",
+        "category": "Herdr"
+      },
+      {
+        "command": "herdr.toggleFollow",
+        "title": "Toggle Follow Herdr Focus",
+        "category": "Herdr",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "herdr.dumpSnapshot",
+        "title": "Show Raw Session Snapshot (debug)",
+        "category": "Herdr"
+      },
+      {
+        "command": "herdr.toggleShellPanes",
+        "title": "Toggle Shell Panes",
+        "category": "Herdr",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "herdr.openSettings",
+        "title": "Open Herdr Bridge Settings",
+        "category": "Herdr",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "herdr.showRaw",
+        "title": "Show Raw Herdr Record",
+        "category": "Herdr",
+        "icon": "$(json)"
+      },
+      {
+        "command": "herdr.openHelp",
+        "title": "How to Read the Sidebar",
+        "category": "Herdr",
+        "icon": "$(question)"
+      },
+      {
+        "command": "herdr.newTab",
+        "title": "New Tab…",
+        "category": "Herdr",
+        "icon": "$(add)"
+      },
+      {
+        "command": "herdr.rename",
+        "title": "Rename…",
+        "category": "Herdr"
+      },
+      {
+        "command": "herdr.closeInHerdr",
+        "title": "Close in Herdr…",
+        "category": "Herdr"
+      },
+      {
+        "command": "herdr.newSpace",
+        "title": "New Space…",
+        "category": "Herdr",
+        "icon": "$(add)"
+      },
+      {
+        "command": "herdr.setupClaudeUsage",
+        "title": "Show Claude Plan Limits in the Sidebar…",
+        "category": "Herdr"
+      },
+      {
+        "command": "herdr.setKiroCredits",
+        "title": "Set Kiro Monthly Credits…",
+        "category": "Herdr"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "herdr.newSpace",
+          "when": "view == herdr.spaces",
+          "group": "navigation@0"
+        },
+        {
+          "command": "herdr.refresh",
+          "when": "view == herdr.spaces",
+          "group": "navigation@1"
+        },
+        {
+          "command": "herdr.toggleFollow",
+          "when": "view == herdr.spaces",
+          "group": "navigation@2"
+        },
+        {
+          "command": "herdr.openTui",
+          "when": "view == herdr.spaces",
+          "group": "navigation@3"
+        },
+        {
+          "command": "herdr.openHelp",
+          "when": "view == herdr.spaces",
+          "group": "navigation@4"
+        },
+        {
+          "command": "herdr.toggleShellPanes",
+          "when": "view == herdr.spaces",
+          "group": "more@1"
+        },
+        {
+          "command": "herdr.openSettings",
+          "when": "view == herdr.spaces",
+          "group": "more@2"
+        },
+        {
+          "command": "herdr.setupHub",
+          "when": "view == herdr.spaces",
+          "group": "more@3"
+        },
+        {
+          "command": "herdr.dumpSnapshot",
+          "when": "view == herdr.spaces",
+          "group": "more@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "herdr.pinSpace",
+          "when": "false"
+        },
+        {
+          "command": "herdr.unmountSpace",
+          "when": "false"
+        },
+        {
+          "command": "herdr.attach",
+          "when": "false"
+        },
+        {
+          "command": "herdr.showRaw",
+          "when": "false"
+        },
+        {
+          "command": "herdr.rename",
+          "when": "false"
+        },
+        {
+          "command": "herdr.closeInHerdr",
+          "when": "false"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "herdr.switchSpace",
+          "when": "webviewId == herdr.spaces && webviewSection =~ /^space/",
+          "group": "1_space@1"
+        },
+        {
+          "command": "herdr.pinSpace",
+          "when": "webviewId == herdr.spaces && webviewSection == space",
+          "group": "1_space@2"
+        },
+        {
+          "command": "herdr.unmountSpace",
+          "when": "webviewId == herdr.spaces && webviewSection == space-mounted",
+          "group": "1_space@2"
+        },
+        {
+          "command": "herdr.attach",
+          "when": "webviewId == herdr.spaces && webviewSection =~ /^(agent|shell)$/",
+          "group": "1_pane@1"
+        },
+        {
+          "command": "herdr.reviewChanges",
+          "when": "webviewId == herdr.spaces && webviewSection =~ /^(space|space-mounted|agent)$/",
+          "group": "2_review@1"
+        },
+        {
+          "command": "herdr.showRaw",
+          "when": "webviewId == herdr.spaces && webviewSection",
+          "group": "9_debug@1"
+        },
+        {
+          "command": "herdr.newTab",
+          "when": "webviewId == herdr.spaces && webviewSection =~ /^space/",
+          "group": "0_create@1"
+        },
+        {
+          "command": "herdr.rename",
+          "when": "webviewId == herdr.spaces && webviewSection",
+          "group": "7_edit@1"
+        },
+        {
+          "command": "herdr.closeInHerdr",
+          "when": "webviewId == herdr.spaces && webviewSection",
+          "group": "8_close@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Herdr Bridge",
+      "properties": {
+        "herdr.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the herdr binary. Empty = auto-detect (Homebrew, ~/.local/bin, PATH)."
+        },
+        "herdr.socketPath": {
+          "type": "string",
+          "default": "",
+          "description": "Herdr socket path. Empty = HERDR_SOCKET_PATH, then ~/.config/herdr/herdr.sock."
+        },
+        "herdr.followMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "When you switch spaces in Herdr (e.g. in your Mac terminal), this window follows. Only active in a hub window or after you've switched a space from VS Code."
+        },
+        "herdr.terminalLocation": {
+          "type": "string",
+          "enum": [
+            "editor",
+            "panel"
+          ],
+          "default": "editor",
+          "description": "Where attached agent terminals open."
+        },
+        "herdr.closeTerminalsOnSwitch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Close attach terminals of other spaces when switching. Agents keep running in Herdr."
+        },
+        "herdr.autoAttachOnSwitch": {
+          "type": "boolean",
+          "default": true,
+          "description": "When switching to a space, open each of its panes as its own terminal tab: agents first (most urgent first), then shells (see herdr.autoAttachShells)."
+        },
+        "herdr.autoAttachShells": {
+          "type": "boolean",
+          "default": true,
+          "description": "Also open the space's plain shell panes when switching to it (needs herdr.autoAttachOnSwitch)."
+        },
+        "herdr.notifyOn": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "blocked",
+              "done",
+              "working",
+              "idle"
+            ]
+          },
+          "default": [
+            "blocked",
+            "done"
+          ],
+          "description": "Agent states that trigger a VS Code notification."
+        },
+        "herdr.agents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "claude",
+            "codex",
+            "kiro",
+            "cursor"
+          ],
+          "description": "Agents offered first when creating a tab or space (Herdr agent kinds, e.g. claude, codex, kiro, cursor, gemini, copilot, opencode, amp). The rest are under \"More agents…\"."
+        },
+        "herdr.kiroMonthlyCredits": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Your Kiro plan's monthly credit allowance (Kiro shows it in /usage). Kiro doesn't expose it to other tools, so enter it here to see a usage bar in the sidebar. 0 = unknown."
+        },
+        "herdr.showShellPanes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show plain shell panes under each space (Herdr's own agent list hides them)."
+        },
+        "herdr.hubWindow": {
+          "type": "boolean",
+          "default": false,
+          "description": "Marks this window as the Herdr hub (set automatically by 'Set up Herdr Hub Window')."
+        }
+      }
+    },
+    "terminal": {
+      "profiles": [
+        {
+          "id": "herdr.shell",
+          "title": "Herdr Shell",
+          "icon": "terminal"
+        },
+        {
+          "id": "herdr.agent.claude",
+          "title": "Herdr: Claude",
+          "icon": {
+            "light": "media/agent-logos/claude-color.svg",
+            "dark": "media/agent-logos/claude-color.svg"
+          }
+        },
+        {
+          "id": "herdr.agent.codex",
+          "title": "Herdr: Codex",
+          "icon": {
+            "light": "media/agent-logos/codex-color.svg",
+            "dark": "media/agent-logos/codex-color.svg"
+          }
+        },
+        {
+          "id": "herdr.agent.kiro",
+          "title": "Herdr: Kiro",
+          "icon": {
+            "light": "media/agent-logos/kiro-color.svg",
+            "dark": "media/agent-logos/kiro-color.svg"
+          }
+        },
+        {
+          "id": "herdr.agent.cursor",
+          "title": "Herdr: Cursor",
+          "icon": {
+            "light": "media/agent-logos/cursor-light.svg",
+            "dark": "media/agent-logos/cursor-dark.svg"
+          }
+        },
+        {
+          "id": "herdr.agent.other",
+          "title": "Herdr: Other Agent…",
+          "icon": "hubot"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "gen:types": "node scripts/gen-herdr-types.mjs",
+    "gen:icons": "node scripts/gen-agent-icons.mjs",
+    "codicons": "node scripts/copy-codicons.mjs",
+    "pretest": "tsc -p .",
+    "test": "node out/test/mockTest.js && node out/test/viewTest.js && node out/test/usageTest.js && node out/test/gitTest.js",
+    "package": "npm run codicons && tsc -p . && vsce package --allow-missing-repository --skip-license",
+    "install-local": "npm run package && code --install-extension herdr-bridge-$npm_package_version.vsix --force"
+  },
+  "devDependencies": {
+    "@lobehub/icons-static-svg": "^1.95.1",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "~1.90.0",
+    "@vscode/codicons": "^0.0.46-24",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.4.0"
+  }
+}
