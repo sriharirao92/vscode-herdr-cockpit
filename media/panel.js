@@ -315,17 +315,69 @@
       ${open ? `<div class="usage">${state.usage.map(usageRow).join('')}</div>` : ''}`;
   }
 
+  /** Herdr isn't connected: say why and offer the right next step (reasons from src/connection.ts). */
   function disconnected() {
+    const c = state.connection || { kind: 'connecting' };
+    const b = (/** @type {string} */ act, /** @type {string} */ label, primary = false) =>
+      `<button class="btn${primary ? '' : ' secondary'}" data-act="${act}">${esc(label)}</button>`;
+    const path = (/** @type {string} */ label, /** @type {string|undefined} */ p) => (p ? `<p class="path">${esc(label)} <code>${esc(p)}</code></p>` : '');
+    if (c.kind === 'connecting' || c.kind === 'starting' || c.kind === 'reconnecting')
+      return `<div class="splash"><div class="big">${icon('sync', 'spin')}</div><h2>${c.kind === 'starting' ? 'Starting Herdr…' : 'Connecting to Herdr…'}</h2></div>`;
+    /** @type {Record<string, {icon: string, title: string, text: string, buttons: string, extra?: string}>} */
+    const screens = {
+      'not-installed': {
+        icon: 'cloud-download',
+        title: "Herdr isn't installed",
+        text: 'Herdr Hub shows and controls a Herdr server, and needs the <code>herdr</code> command.',
+        buttons: b('openInstallDocs', 'Install Herdr', true) + b('refresh', 'Retry') + b('openSettings', 'Set herdr path'),
+        extra: path('Looked for', c.binary),
+      },
+      'not-running': {
+        icon: 'debug-disconnect',
+        title: "Herdr isn't running",
+        text: 'Your spaces and agents live in the Herdr server. Start it in the background, or open Herdr here.',
+        buttons: b('startServer', 'Start Herdr', true) + b('openTui', 'Open Herdr TUI') + b('refresh', 'Retry'),
+        extra: path(c.customSocket ? 'Socket (from herdr.socketPath):' : 'Socket:', c.socket) + (c.customSocket ? b('openSettings', 'Settings') : ''),
+      },
+      crashed: {
+        icon: 'warning',
+        title: 'Herdr stopped unexpectedly',
+        text: 'Its socket was left behind; starting it again is safe. Herdr restores your spaces and tabs.',
+        buttons: b('startServer', 'Start Herdr', true) + b('openTui', 'Open Herdr TUI') + b('refresh', 'Retry'),
+        extra: path('Socket:', c.socket),
+      },
+      incompatible: {
+        icon: 'versions',
+        title: "This Herdr version isn't compatible",
+        text: `Herdr ${esc(c.version || '?')} speaks protocol ${esc(c.protocol ?? '?')}; Herdr Hub expects ${esc(c.expectedProtocol)}. Update Herdr (<code>herdr update</code>) or Herdr Hub.`,
+        buttons: b('refresh', 'Retry', true),
+      },
+      unreachable: {
+        icon: 'debug-disconnect',
+        title: "Herdr isn't answering",
+        text: `The server is running but didn't respond${c.detail ? `: ${esc(c.detail)}` : ''}.`,
+        buttons: b('refresh', 'Retry', true) + b('openTui', 'Open Herdr TUI'),
+        extra: path('Socket:', c.socket),
+      },
+    };
+    const sc = screens[c.reason || 'not-running'] || screens['not-running'];
     return `<div class="splash">
-      <div class="big">${icon('debug-disconnect')}</div>
-      <h2>Herdr isn't reachable</h2>
-      <p>Start it with <code>herdr</code> in any terminal, or open it here.</p>
-      <div class="btns">
-        <button class="btn" data-act="openTui">Open Herdr TUI</button>
-        <button class="btn secondary" data-act="refresh">Retry</button>
-        <button class="btn secondary" data-act="setupHub">Set up hub window</button>
-      </div>
+      <div class="big">${icon(sc.icon)}</div>
+      <h2>${sc.title}</h2>
+      <p>${sc.text}</p>
+      <div class="btns">${sc.buttons}</div>
+      ${sc.extra || ''}
+      <p class="links"><a href="#" data-act="copyDiagnostics">Copy diagnostics</a> · <a href="#" data-act="setupHub">Set up hub window</a> · <a href="#" data-act="openHelp">Help</a></p>
     </div>`;
+  }
+
+  /** A strip above the view while reconnecting, or when Herdr's protocol differs from this build's. */
+  function banner() {
+    const c = state.connection || {};
+    if (c.kind === 'reconnecting') return `<div class="banner">${icon('sync', 'spin')}Reconnecting to Herdr…</div>`;
+    if (c.kind === 'connected' && c.protocol && c.protocol !== c.expectedProtocol)
+      return `<div class="banner warn" title="Herdr Hub was built against protocol ${esc(c.expectedProtocol)}">${icon('warning')}Herdr ${esc(c.version || '')} uses protocol ${esc(c.protocol)}; some details may be missing. Update Herdr Hub.</div>`;
+    return '';
   }
 
   function render() {
@@ -345,7 +397,8 @@
       ? state.spaces.map(spaceCard).join('')
       : `<div class="splash"><div class="big">${icon('layers')}</div><h2>No spaces yet</h2><p>A space is a folder with its agents and shells.</p><div class="btns"><button class="btn" data-act="newSpace">New space</button></div></div>`;
     const spacesLabel = `<div class="section-label">Spaces<button class="icon-btn label-btn" data-act="newSpace" title="New space: a folder or a new git worktree" aria-label="New space">${icon('add')}</button></div>`;
-    app.innerHTML = `${header()}${usageSection()}${attention}${spacesLabel}<div class="spaces">${spaces}</div>`;
+    const stale = state.connection && state.connection.kind === 'reconnecting';
+    app.innerHTML = `${header()}${banner()}<div class="${stale ? 'stale' : ''}">${usageSection()}${attention}${spacesLabel}<div class="spaces">${spaces}</div></div>`;
     for (const n of /** @type {NodeListOf<HTMLElement>} */ (app.querySelectorAll('.fill[data-pct]'))) n.style.width = `${n.dataset.pct}%`;
     // Re-rendering restarts CSS animations; offset them by wall-clock so spinners and pulses don't jump.
     const delay = `-${Date.now() % 1000}ms`;
@@ -360,6 +413,7 @@
     const el = /** @type {HTMLElement|null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-act]'));
     if (!el) return;
     e.stopPropagation();
+    e.preventDefault(); // some actions are <a href="#"> links
     const act = el.dataset.act;
     const holder = /** @type {HTMLElement|null} */ (el.closest('[data-space]'));
     const spaceId = el.dataset.space || holder?.dataset.space;

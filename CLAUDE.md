@@ -8,7 +8,7 @@ into **one** VS Code window. Goal: keep Herdr's spaces/agents workflow but get t
 The user runs Herdr in the macOS terminal. Their agents include Claude Code, Codex and Kiro. The extension is a **client of the
 Herdr server**. It never owns agent processes; Herdr does.
 
-Status: working prototype (v0.0.20), installed and tried by the user on macOS against a real Herdr
+Status: working prototype (v0.0.26), installed and tried by the user on macOS against a real Herdr
 server (installed binary: herdr 0.9.1, socket protocol 22; the online docs were at 0.9.3). Confirmed working in real use: sidebar lists real
 spaces/agents, space switching, attach terminals.
 
@@ -30,12 +30,13 @@ Bump `version` in package.json for each vsix you hand to the user.
 | `herdrClient.ts` | Herdr socket API client. NDJSON over a Unix socket. `request()` uses one short-lived connection per call. `subscribe()` keeps a connection open for `events.subscribe`. Resolves the socket path the way Herdr does (`HERDR_SOCKET_PATH` → `HERDR_SESSION` → `~/.config/herdr/herdr.sock`). **No vscode imports** (testable standalone). |
 | `herdrTypes.ts` | **Generated** from `herdr api schema --json` by `scripts/gen-herdr-types.mjs` (`npm run gen:types`). Don't edit by hand; add roots in the script when using more of the API. |
 | `model.ts` | `normalize(result)` turns the `session.snapshot` result into Space → Tab → Pane, typed against `herdrTypes.ts`. Handles agent status, state labels, metadata tokens, terminal title, worktree, rollups and counts. Throws on a response missing the snapshot arrays. No vscode imports. |
+| `connection.ts` | Herdr not installed / not running / crashed / incompatible / unreachable (`diagnose()`, via `herdr status server --json`), starting the headless server (`startServer()`: `herdr server` spawned detached so it outlives VS Code; refuses if status says one is running, including when a custom `herdr.socketPath` would put a second server on a session that already runs elsewhere; a `…/sessions/<name>/herdr.sock` socket also sets `HERDR_SESSION`), reconnect backoff, `resolveBinary`. No vscode imports. |
 | `herdrActions.ts` | Typed create/rename/close wrappers (`workspace.create`, `tab.create`, `worktree.create`/`remove`, `agent.start`/`rename`, `pane.rename`/`close`, `tab.*`, `workspace.*`). Creates default to `focus:false`. `AGENT_KINDS` (display names), `agentName()` (unique valid names), `AGENT_NAME`. No vscode imports. |
 | `usage.ts` | "Usage" section data (no credentials read): Codex **live** via `codex app-server` stdio JSON-RPC (`initialize` → `account/rateLimits/read`; same data as Codex `/usage`; ~1s, so cached 5 min; `codex app-server proxy` to the daemon did NOT answer this handshake), falling back to `rate_limits` in `~/.codex/sessions/**/rollout-*.jsonl` (stale: Codex ≥0.160 stopped writing them, and they only update on model requests); Claude Code plan % from our opt-in status-line capture `~/.herdr-hub/claude-usage.json` (matches `/usage`; per-model weekly limits like Fable aren't exposed), tokens from `~/.claude/projects/**/*.jsonl` over the real session window (5h reset − 5h), else an estimated block; Kiro credits from `~/.kiro/sessions/cli/*.json` `metering_usage` (allowance: user setting `herdr.kiroMonthlyCredits`; Kiro exposes it to no other tool: `kiro-cli acp` v2 has no usage method, v3 boots its whole agent engine, creates sessions and didn't answer; the TUI's `/usage` uses AWS `GetUsageLimits` with Kiro's own login). Only agent kinds running in Herdr are read and shown (`only` / viewState filter); no Codex process starts without a Codex pane. Polled every 60s while the sidebar is visible. No vscode imports. **Kiro session files contain other data (tool args, even tokens): only read the metering fields.** |
 | `usageSetup.ts` | Opt-in "Show plan limits…": Claude Code gives `rate_limits` only to a status-line command, so this installs `~/.herdr-hub/claude-statusline.sh` in `~/.claude/settings.json` after a modal (backup `settings.json.herdr-backup`); never replaces an existing statusLine. |
 | `manage.ts` | The VS Code flows around those: pick Shell/agent, New tab, New space (folder or git worktree), Rename…, Close in Herdr… (with confirmations; worktree delete with force fallback). |
 | `profiles.ts` | Terminal profiles (`contributes.terminal.profiles`): "Herdr Shell" + per-agent. The provider creates the Herdr tab, returns `herdr terminal attach <id>`, and adopts the terminal on `onDidOpenTerminal`; falls back to a local shell when Herdr isn't reachable. |
-| `extension.ts` | Wiring and sync loop. Re-snapshots on any event (debounced 120ms); event payloads are only treated as "something changed". Polls every 1.5s when there's no event stream, every 15s as a safety net otherwise. Also: notifications on status transitions, follow mode, status bar, all commands, hub-window setup. Tracks time-in-state locally (`stateSince`) because Herdr only exposes `state_change_seq`. |
+| `extension.ts` | Wiring and sync loop. Connection states: connecting → connected → reconnecting (keep last view greyed 4s) → down (diagnosed; retry with backoff 1.5s→10s; instant retry on window focus, sidebar shown, socket file appearing via fs.watch). On loss: notify once, clear badge/status color; on return: offer to reopen the lost space's tabs (matched by id, then name: ids change across Herdr restarts). Hub window auto-start per `herdr.startServer` (ask once → remember). Re-snapshots on any event (debounced 120ms); event payloads are only treated as "something changed". Polls every 1.5s when there's no event stream, every 15s as a safety net otherwise. Also: notifications on status transitions, follow mode, status bar, all commands, hub-window setup. Tracks time-in-state locally (`stateSince`) because Herdr only exposes `state_change_seq`. |
 | `panel.ts` | "Spaces & Agents" **webview view** (replaced the TreeView in v0.0.4: the tree API allows only one grey description line and an icon tint per row). Posts a `ViewState`, maps webview actions to `herdr.*` commands. CSP: nonce script, no inline styles. Right-click menus use `webview/context` + `data-vscode-context`. |
 | `viewState.ts` | Builds the JSON the webview draws (names, headlines, shell summaries, attention list). No vscode imports. |
 | `activity.ts` | What panes are doing: `pane.process_info` (foreground process) + `pane.read` (`recent_unwrapped` for shells, `detection` for agents), summarized to "running X" / "at prompt, last ran Y" + last output lines + failure flag. Polled every 4s, only while the sidebar is visible. No vscode imports. |
@@ -52,7 +53,7 @@ Bump `version` in package.json for each vsix you hand to the user.
 
 ## Key design decisions (keep unless the user says otherwise)
 - **VS Code extension as a Herdr client, not a Herdr plugin.** An optional Herdr plugin is in the backlog only for the reverse jump.
-- **Hub window:** `Herdr: Set up Herdr Hub Window` creates `~/.herdr-hub/herdr-hub.code-workspace`. Slot 0 is `~/.herdr-hub`, so switching spaces never restarts extensions. The workspace setting `herdr.hubWindow: true` enables follow mode there. In the hub, the extension also sets `terminal.integrated.tabs.description` to `${task}` at workspace scope (once, only if unset) so terminal tabs show just their name; VS Code has no per-terminal option for this.
+- **Hub window:** `Herdr: Set up Herdr Hub Window` creates `~/.herdr-hub/herdr-hub.code-workspace`. Slot 0 is `~/.herdr-hub`, so switching spaces never restarts extensions. The workspace setting `herdr.hubWindow: true` enables follow mode there. In the hub, the extension also sets `terminal.integrated.tabs.description` to `${task}` at workspace scope (once, only if unset) so terminal tabs show just their name; VS Code has no per-terminal option for this. The first time a hub window opens it runs `herdr.spaces.focus` once (workspaceState `herdr.hubViewRevealed`): Cursor's horizontal activity bar hides extension icons behind a ⌄ overflow, so users couldn't find the view.
 - **Follow mode** acts only in a hub window, or after the user has switched a space from VS Code (the `herdr.managedWindow` workspaceState flag). This prevents hijacking unrelated windows.
 - **Switching a space:** mount its folder, reveal it in Explorer, call `workspace.focus` in Herdr, and close the attach terminals of other spaces (`closeTerminalsOnSwitch`). Then attach every pane as its own tab: agents most urgent first (blocked > done > working > idle), then shells in tab order (`autoAttachShells`). VS Code places each new terminal tab after the previous one (editor area and panel alike), so they're opened in that order, then the first is focused.
 - **Events are invalidation signals.** Always re-read with `session.snapshot`; never apply event payloads incrementally. This is what Herdr's docs recommend: on `events_lost`, resubscribe and re-snapshot.
@@ -65,7 +66,7 @@ Bump `version` in package.json for each vsix you hand to the user.
 - Requests look like `{"id","method","params"}\n`. Responses look like `{"id","result"}` or `{"id","error":{code,message}}`.
 - Methods used: `session.snapshot`, `events.subscribe`, `workspace.focus {workspace_id}`, `agent.focus {target}`.
 - `agent.focus` params are `{target}` (confirmed in the schema). The call is best-effort and errors are swallowed.
-- Event types subscribed are listed in `DEFAULT_SUBSCRIPTIONS`.
+- Events: `subscriptionsFor(paneIds)` = `DEFAULT_SUBSCRIPTIONS` (parameterless lifecycle events) + one `pane.agent_status_changed {pane_id}` per pane of the latest snapshot; `extension.ts` resubscribes when the pane set changes. Typed against the generated `Subscription` union, so a pane-scoped event without `pane_id` won't compile.
 - Pane ids look like `w1:p1`, tab ids `w1:t1`. Ids can change when a pane moves across workspaces.
 - Useful extra methods:
   - `agent.prompt` (accepts an optional `wait`), `agent.wait`, `agent.start`, `pane.read`
@@ -81,7 +82,9 @@ Bump `version` in package.json for each vsix you hand to the user.
 - `agent_status` is `idle | working | blocked | done | unknown`; Herdr reports `done` itself. There is **no `seen` field** in the snapshot. Shell panes report `unknown`.
 - `tokens` and `state_labels` sit directly on records (no `metadata` wrapper). `WorkspaceInfo` has **no cwd and no branch**; `worktree` (when set) has `checkout_path`, `is_linked_worktree` and repo info. Branch comes from `gitInfo.ts`.
 - The two kiro agents the user saw as "idle" really are `idle` in Herdr.
-- Subscribable but unused: `workspace.metadata_updated`, `pane.updated` (likely needed for instant token/label updates).
+- **Events (verified on herdr 0.9.1, v0.0.25 fix):** agent status changes fire **no** global event; only `pane.agent_status_changed`, which requires a `pane_id` (so do `pane.output_matched` and `pane.scroll_changed`). Up to v0.0.24 we subscribed to it without one, so every `events.subscribe` failed (`missing field pane_id`) and the hub silently polled at 1.5s. One unknown pane id rejects the whole request (`pane_not_found`); a subscribed pane closing doesn't end the stream. `pane.updated` fires on every terminal-title change (agents animate titles), so it's not subscribed; `workspace.metadata_updated` is quiet and is.
+- **Start Herdr environment (`serverEnv()`):** panes inherit the server's env, so it's started without VS Code/Electron variables and with Kiro's `Q_TERM_DISABLED=1` (unless `Q_TERM` is set). Without it Kiro's shell integration wraps every pane in `kiro-cli-term` (`zsh (kiro-cli-term)`), which hides agents from Herdr's detection: happened on the first real Start Herdr. A server started from a Kiro-wrapped terminal inherits `Q_TERM` and isn't affected. Verified from inside a pane (`pane.send_text` + `pane.read`); `ps eww` can't read pane shells' env on macOS.
+- **Never start a test server with only a different socket path** (`HERDR_SOCKET_PATH`): sessions are separated by *name*, so it restores the real session's state, resumes its agents and rewrites `~/.config/herdr/session.json` on exit (happened once). Always use `herdr --session <name>` / `HERDR_SESSION` for experiments. macOS caps Unix socket paths at 104 chars.
 - **Learned by testing against a throwaway session** (`herdr --session hb-test server`, socket `~/.config/herdr/sessions/hb-test/herdr.sock`; use this, never the user's live session, to try mutating calls):
   - `agent.start` `name` must match `^[a-z][a-z0-9_-]{0,31}$` (names are CLI targets); we use `claude`, `claude-2`, … and show them as "Claude", "Claude 2".
   - A pane just created isn't at its prompt yet: `agent.start` answers `agent_pane_busy`; `startAgent` retries for up to 15s.
@@ -95,7 +98,7 @@ After upgrading Herdr: `npm run gen:types`, fix compile errors, and save a new `
 
 ## Backlog / ideas
 1. ~~Schema-generated types~~ (done). Extend `ROOTS` in the generator when adding methods below.
-2. Use targeted event payloads, such as `pane.agent_status_changed`, for instant status updates instead of a full re-snapshot. Keep the snapshot fallback.
+2. Status events are subscribed per pane (v0.0.25) but still trigger a full re-snapshot. Could apply their payloads directly; keep the snapshot fallback.
 3. **Prompt agent from VS Code**: on an agent row, open an input box and call `agent.prompt`. Optionally send the current selection or file path as context.
 4. ~~New agent / new worktree space~~ (done: New tab / New space / + button).
 5. A **reverse jump** Herdr plugin (`herdr-plugin.toml`) with an action that opens `vscode://srihari-local.herdr-hub/focus?workspace=<id>`. The extension would need `registerUriHandler`.
@@ -103,6 +106,21 @@ After upgrading Herdr: `npm run gen:types`, fix compile errors, and save a new `
 7. ~~`pane.read` preview for blocked agents~~ (done in the sidebar).
 8. Support named sessions and remote machines (`herdr --remote`) via the `herdr.socketPath` setting or a session picker.
 9. Bundle with esbuild. Add an ESLint config and CI. Swap the placeholder `repository` URL in package.json for the real one.
+
+## Open-source release (decided 2026-10-05)
+- Name stays **Herdr Hub**, described as a community (unofficial) VS Code client for Herdr. License **MIT**. Publisher **`sriharirao`** (free on Marketplace and Open VSX when checked; not yet created). The current id `srihari-local.herdr-hub` changes at release: uninstall the old id first or both install side by side.
+- One repo: extension plus the Herdr plugin in a subfolder (`herdr plugin install <owner>/<repo>/<subdir>`).
+- Target editors, from each app's `product.json` on the user's Mac:
+
+  | Editor | CLI | URL scheme | Gallery | VS Code base |
+  |---|---|---|---|---|
+  | VS Code | `code` | `vscode` | Microsoft Marketplace | 1.140 |
+  | Positron | `positron` | `positron` | Open VSX (Posit mirror `p3m.dev/openvsx`) | 1.130 |
+  | Kiro | `kiro` | `kiro` | `open-vsx.org` | 1.131 |
+  | Cursor 3.23 | `cursor` (app `bin/`, not on PATH by default) | `cursor` | `marketplace.cursorapi.com`, Cursor's proxy that serves Open VSX extensions | 1.128 |
+
+  So publish to Marketplace **and** Open VSX. Cursor's `bin/` also ships a `code` script, so never assume `code` means VS Code. Cursor 3.23 activated v0.0.24 and connected to Herdr (per its exthost log).
+- macOS + Linux: no macOS-only paths or commands without a Linux branch.
 
 ## Conventions
 - **Security (from a commit review):** git runs only in trusted windows (Workspace Trust is the real boundary; the list below closes known routes but can't be proven complete), with `--no-optional-locks`, `core.fsmonitor=false`, `log.showSignature=false`, `protocol.allow=never` (no lazy fetch in partial clones → no core.sshCommand/ext::), `core.hooksPath=/dev/null`, every repo-defined `filter.<driver>` blanked (`filterOverrides()` fails closed: any config-read error other than exit 1, or an unexpressible driver name → skip git) and `--ignore-submodules=all`: a repo's own `.git/config` can otherwise make `git status`/`log` run programs (fsmonitor, clean filters, gpg.program). gitTest proves each vector stays off. `herdr.binaryPath`/`socketPath` are `machine`-scoped so a repository's `.vscode/settings.json` can't pick the program we launch. The hub is recognised only by its workspace file (`~/.herdr-hub/herdr-hub.code-workspace`), not by a `herdr.hubWindow` workspace setting alone. Keep these when touching git, settings or process launches; never put real paths, hosts, names or ids in tests/fixtures/docs (the repo was scrubbed once).

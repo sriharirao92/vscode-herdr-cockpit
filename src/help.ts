@@ -6,7 +6,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 
 /** Commands the page's buttons may run. */
-const ALLOWED = new Set(['openSettings', 'setupHub', 'refresh']);
+const ALLOWED = new Set(['openSettings', 'setupHub', 'refresh', 'startServer']);
 
 let current: vscode.WebviewPanel | undefined;
 

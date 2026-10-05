@@ -173,6 +173,10 @@ export interface AgentRenameParams {
   target: string;
 }
 
+export interface EventsSubscribeParams {
+  subscriptions: Subscription[];
+}
+
 export interface PaneInfo {
   agent?: string | null;
   agent_session?: AgentSessionInfo | null;
@@ -286,6 +290,72 @@ export type ReadFormat = 'text' | 'ansi';
 
 export type ReadSource = 'visible' | 'recent' | 'recent_unwrapped' | 'detection';
 
+export type Subscription = {
+  type: 'workspace.created';
+} | {
+  type: 'workspace.updated';
+} | {
+  type: 'workspace.metadata_updated';
+} | {
+  type: 'workspace.renamed';
+} | {
+  type: 'workspace.moved';
+} | {
+  type: 'workspace.reordered';
+} | {
+  type: 'workspace.closed';
+} | {
+  type: 'workspace.focused';
+} | {
+  type: 'worktree.created';
+} | {
+  type: 'worktree.opened';
+} | {
+  type: 'worktree.removed';
+} | {
+  type: 'tab.created';
+} | {
+  type: 'tab.closed';
+} | {
+  type: 'tab.focused';
+} | {
+  type: 'tab.renamed';
+} | {
+  type: 'tab.moved';
+} | {
+  type: 'pane.created';
+} | {
+  type: 'pane.closed';
+} | {
+  type: 'pane.updated';
+} | {
+  type: 'pane.focused';
+} | {
+  type: 'pane.moved';
+} | {
+  type: 'pane.exited';
+} | {
+  type: 'pane.agent_detected';
+} | {
+  /** format: uint32 */
+  lines?: number | null;
+  match: OutputMatch;
+  pane_id: string;
+  source: ReadSource;
+  /** default: true */
+  strip_ansi?: boolean;
+  type: 'pane.output_matched';
+} | {
+  agent_status?: AgentStatus | null;
+  pane_id: string;
+  type: 'pane.agent_status_changed';
+} | {
+  pane_id: string;
+  type: 'pane.scroll_changed';
+} | {
+  type: 'layout.updated';
+};
+
 export interface AgentSessionInfo {
   agent: string;
   kind: AgentSessionRefKind;
@@ -336,6 +406,14 @@ export interface PaneLayoutSplit {
   ratio: number;
   rect: PaneLayoutRect;
 }
+
+export type OutputMatch = {
+  type: 'substring';
+  value: string;
+} | {
+  type: 'regex';
+  value: string;
+};
 
 export type AgentSessionRefKind = 'id' | 'path';
 

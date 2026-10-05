@@ -11,7 +11,7 @@
   <nav class="toc">
     <a href="#top-bar">Header</a><a href="#usage">Usage</a><a href="#needs-you">Needs you</a><a href="#spaces">Spaces</a><a href="#git">Git line</a>
     <a href="#create">Create, rename, close</a><a href="#agents">Agents &amp; colors</a><a href="#shells">Shells</a><a href="#terminals">Terminal tabs</a>
-    <a href="#actions">Actions</a><a href="#elsewhere">Status bar &amp; alerts</a><a href="#follow">Follow mode</a>
+    <a href="#actions">Actions</a><a href="#elsewhere">Status bar &amp; alerts</a><a href="#follow">Follow mode</a><a href="#offline">When Herdr isn't running</a>
     <a href="#keys">Keyboard</a><a href="#settings">Settings</a><a href="#privacy">Privacy &amp; safety</a><a href="#trouble">Troubleshooting</a>
   </nav>
 </header>
@@ -26,6 +26,7 @@
   <table>
     <tr><th>Title bar</th><th>What it does</th></tr>
     <tr><td><span class="codicon codicon-question"></span> Help</td><td>Opens this page.</td></tr>
+    <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Start Herdr</b></td><td>Only while Herdr isn't running: starts it in the background. See <a href="#offline">When Herdr isn't running</a>.</td></tr>
     <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Follow Herdr Focus</b></td><td>On/off (checked when on). When you switch spaces in Herdr itself, this window switches too. See <a href="#follow">Follow mode</a>.</td></tr>
     <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Open Herdr TUI</b></td><td>Opens Herdr's own full-screen interface in an editor tab (also starts the Herdr server if it isn't running).</td></tr>
     <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Set Up Hub Window</b></td><td>Opens a dedicated VS Code window for Herdr. See <a href="#follow">the hub window</a>.</td></tr>
@@ -304,7 +305,7 @@
 <section id="elsewhere">
   <h2>Status bar, badge and alerts</h2>
   <ul>
-    <li><b>Status bar</b> (bottom left): <span class="codicon codicon-hubot"></span> agent count, then working <span class="codicon codicon-sync"></span>, blocked <span class="codicon codicon-warning"></span> and done <span class="codicon codicon-pass-filled"></span> counts. It turns yellow when something is blocked. Click it to jump to the agent that needs you. <span class="codicon codicon-debug-disconnect"></span> means Herdr isn't reachable; click to retry.</li>
+    <li><b>Status bar</b> (bottom left): <span class="codicon codicon-hubot"></span> agent count, then working <span class="codicon codicon-sync"></span>, blocked <span class="codicon codicon-warning"></span> and done <span class="codicon codicon-pass-filled"></span> counts. It turns yellow when something is blocked. Click it to jump to the agent that needs you. <span class="codicon codicon-debug-disconnect"></span> <b>Herdr</b> means Herdr isn't connected: click it for Start Herdr, Open Herdr TUI, Retry and Copy Diagnostics.</li>
     <li><b>Badge</b> on the sidebar icon: how many agents are blocked or done.</li>
     <li><b>Notifications</b> when an agent becomes blocked or done, with <b>Attach</b> and (when done) <b>Review changes</b> buttons.</li>
   </ul>
@@ -315,8 +316,45 @@
   <p><b>Follow mode</b> (<span class="codicon codicon-ellipsis"></span> menu → <b>Follow Herdr Focus</b>): when you switch spaces in Herdr itself, this window switches too.
     To avoid hijacking unrelated windows it only acts in the hub window, or in a window where you've already switched a space from the sidebar.</p>
   <p>The <b>hub window</b> (<span class="codicon codicon-ellipsis"></span> menu → <b>Set Up Hub Window</b>) is a dedicated VS Code window for Herdr. Its first folder never changes, so switching spaces never restarts your extensions. In the hub window, terminal tabs show
-    just their name, and VS Code's terminal <b>+</b> creates Herdr tabs (see <a href="#create">Create</a>).</p>
+    just their name, and VS Code's terminal <b>+</b> creates Herdr tabs (see <a href="#create">Create</a>). The first time a hub window opens, it opens this sidebar for you.</p>
   <p><button class="btn secondary" data-cmd="setupHub">Set up hub window</button></p>
+</section>
+
+<section id="offline">
+  <h2>When Herdr isn't running</h2>
+  <p>Your spaces and agents live in the Herdr server, so without it the sidebar has nothing to show. It says why and offers the next step:</p>
+  <table>
+    <tr><th>The sidebar says</th><th>What to do</th></tr>
+    <tr><td>Herdr isn't running</td><td><b>Start Herdr</b> starts the server in the background, with no window and with a terminal-like environment (VS Code's own variables aren't passed on to your panes). It keeps running after you quit VS Code,
+      so your agents keep running too; stop it with <code>herdr server stop</code>. <b>Open Herdr TUI</b> runs Herdr's full interface in an editor tab instead.</td></tr>
+    <tr><td>Herdr stopped unexpectedly</td><td>It crashed and left its socket file behind. <b>Start Herdr</b> is safe: Herdr restores your spaces, tabs and folders.
+      Agents with a Herdr integration (such as Claude Code) resume their sessions; others come back as shells.</td></tr>
+    <tr><td>Herdr isn't installed</td><td><b>Install Herdr</b> opens herdr.dev. If it is installed somewhere unusual, set <code>herdr.binaryPath</code> (user settings).</td></tr>
+    <tr><td>This Herdr version isn't compatible</td><td>Herdr and Herdr Hub speak different protocol versions: update Herdr (<code>herdr update</code>) or Herdr Hub.</td></tr>
+    <tr><td>Herdr isn't answering</td><td>The server runs but doesn't respond: <b>Retry</b>, or <b>Copy diagnostics</b> for a bug report.</td></tr>
+  </table>
+  <dl>
+    <dt>Opening the hub window with Herdr stopped</dt>
+    <dd>The first time, Herdr Hub asks whether to start Herdr whenever the hub window opens: <b>Always Start Herdr</b>, <b>Not Now</b> (ask again
+      next time) or <b>Never</b>. Change it later with the <code>herdr.startServer</code> setting. Herdr Hub never starts a second server for a
+      session that already has one.</dd>
+    <dt>Short interruptions</dt>
+    <dd>If the connection drops briefly (for example while Herdr updates), the sidebar keeps the last view, greyed out, with
+      <b>Reconnecting to Herdr…</b>. It reconnects by itself: right away when Herdr's socket reappears, when you focus the window or open the
+      sidebar, and otherwise every few seconds (backing off to 10&nbsp;s).</dd>
+    <dt>If Herdr stops while you work</dt>
+    <dd>You get one notification (your agents stopped with it), the status bar shows <span class="codicon codicon-debug-disconnect"></span> <b>Herdr</b>,
+      and the badge is cleared. Terminal tabs attached to Herdr end; closing them is fine.</dd>
+    <dt>When Herdr is back</dt>
+    <dd>Herdr Hub offers <b>Reopen the tabs for</b> the space you had open. That replaces the ended tabs with fresh ones (pane ids change when
+      Herdr restarts, so it finds the space by name).</dd>
+    <dt>Meanwhile</dt>
+    <dd>VS Code's terminal <b>+</b> opens ordinary local shells (it tells you once). <b>New Space</b> and <b>New Tab</b> offer to start Herdr first.</dd>
+    <dt>Copy diagnostics</dt>
+    <dd>Copies Herdr Hub's and VS Code's versions, the herdr path and socket path it uses, Herdr's own status report and the connection state,
+      for a bug report. It includes local file paths, so check it before sharing.</dd>
+  </dl>
+  <p><button class="btn" data-cmd="startServer"><span class="codicon codicon-play"></span> Start Herdr</button></p>
 </section>
 
 <section id="keys">
@@ -352,9 +390,16 @@
 <section id="trouble">
   <h2>Troubleshooting</h2>
   <dl>
-    <dt>"Herdr isn't reachable"</dt><dd>Start the server by running <code>herdr</code> in any terminal, or use <b>Open Herdr TUI</b>. If you use a named session or a custom socket, set <code>herdr.socketPath</code>.</dd>
+    <dt>Can't find the Herdr Hub sidebar (Cursor and other editors)</dt><dd>Open it from the Command Palette: <b>Herdr Hub: Focus on Spaces &amp; Agents View</b>.
+      Cursor shows its activity bar as a row of icons across the top of the sidebar, and icons that don't fit sit behind the <b>⌄</b> arrow at the end of the row.
+      Once the sidebar is open, right-click the icon row to keep Herdr Hub visible, or drag it to the other side of the window.</dd>
+    <dt>The sidebar says Herdr isn't running, installed or answering</dt><dd>See <a href="#offline">When Herdr isn't running</a>. If you use a named Herdr session or a custom socket, set <code>herdr.socketPath</code> (user settings).</dd>
     <dt>Clicking a space says "open a folder first"</dt><dd>Spaces are mounted next to the folder the window already has. Open any folder, or set up the hub window.</dd>
     <dt>A terminal tab won't open</dt><dd>VS Code may not find the <code>herdr</code> binary when launched from the Dock. Set <code>herdr.binaryPath</code> in your <b>user</b> settings (workspace values are ignored).</dd>
+    <dt>Agents show up as shells running "zsh (kiro-cli-term)"</dt><dd>Kiro's shell integration wrapped Herdr's pane shells, which hides agents from
+      Herdr. It happens when the Herdr server was started without Kiro's terminal around it (older Herdr Hub versions' <b>Start Herdr</b> did this).
+      The agents are still running. Stop Herdr (<code>herdr server stop</code>) and click <b>Start Herdr</b> again: panes then start without the wrapper,
+      and agents with a Herdr integration resume.</dd>
     <dt>No git line under a space</dt><dd>The folder isn't a git repository, or the window isn't trusted (<b>Manage Workspace Trust</b> in the Command Palette).</dd>
     <dt>An agent is missing from Usage</dt><dd>Usage lists only Claude Code, Codex and Kiro, and only while one of their panes is open in Herdr.</dd>
     <dt>Claude Code shows no bars</dt><dd>Click <b>Show plan limits…</b>. Bars need a claude.ai Pro or Max plan and appear after Claude's next reply.</dd>

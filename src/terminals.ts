@@ -3,22 +3,9 @@
 // Closing the VS Code terminal only detaches; the process keeps running in Herdr.
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import type { Pane } from './model';
 
-export function resolveBinary(override?: string): string {
-  if (override) return override.startsWith('~') ? path.join(os.homedir(), override.slice(1)) : override;
-  // GUI-launched VS Code on macOS often lacks Homebrew in PATH, so probe common spots.
-  const candidates = [
-    '/opt/homebrew/bin/herdr',
-    '/usr/local/bin/herdr',
-    path.join(os.homedir(), '.local/bin/herdr'),
-    path.join(os.homedir(), '.cargo/bin/herdr'),
-    path.join(os.homedir(), '.nix-profile/bin/herdr'),
-  ];
-  return candidates.find((c) => fs.existsSync(c)) ?? 'herdr';
-}
+export { resolveBinary } from './connection';
 
 interface Entry {
   term: vscode.Terminal;
@@ -52,15 +39,37 @@ export class AttachTerminals implements vscode.Disposable {
     });
   }
 
+  /** A live attach terminal is open for this pane (one whose process exited, e.g. Herdr stopped, doesn't count). */
   has(paneId: string) {
-    return this.byPane.has(paneId);
+    const e = this.byPane.get(paneId);
+    return !!e && e.term.exitStatus === undefined;
+  }
+
+  /** Spaces that have attach terminals open (live or not), e.g. to reopen them after Herdr restarts. */
+  spaces(): string[] {
+    return [...new Set([...this.byPane.values()].map((e) => e.spaceId))];
+  }
+
+  /** Some attach tab's process has exited (Herdr stopped under it). */
+  hasExited(): boolean {
+    return [...this.byPane.values()].some((e) => e.term.exitStatus !== undefined);
+  }
+
+  /** Close tabs whose attach process has exited (Herdr stopped under them). */
+  disposeExited() {
+    this.closeWhere((e) => e.term.exitStatus !== undefined);
   }
 
   attach(pane: Pane, opts: { preserveFocus?: boolean; startingAs?: string } = {}): vscode.Terminal | undefined {
     const existing = this.byPane.get(pane.id);
-    if (existing) {
+    if (existing && existing.term.exitStatus === undefined) {
       existing.term.show(opts.preserveFocus);
       return existing.term;
+    }
+    // Its process exited (Herdr stopped or restarted): replace the dead tab with a fresh attach.
+    if (existing) {
+      existing.term.dispose();
+      this.byPane.delete(pane.id);
     }
     const args = pane.isAgent
       ? ['agent', 'attach', pane.id, '--takeover']

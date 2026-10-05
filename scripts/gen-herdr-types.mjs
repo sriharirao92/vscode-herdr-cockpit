@@ -27,6 +27,7 @@ const ROOTS = {
     'PaneRenameParams',
     'PaneTarget',
     'AgentRenameParams',
+    'EventsSubscribeParams',
   ],
 };
 /** `ResponseResult` variants (discriminated by `type`) to emit as `<Pascal>Result` interfaces

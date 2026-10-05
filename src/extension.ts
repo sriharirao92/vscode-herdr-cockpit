@@ -2,16 +2,18 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { DEFAULT_SUBSCRIPTIONS, HerdrClient, resolveSocketPath, Subscription } from './herdrClient';
+import { HerdrClient, resolveSocketPath, Subscription, subscriptionsFor } from './herdrClient';
 import { AgentStatus, attachOrder, Model, normalize, Pane, Space } from './model';
 import type { SessionSnapshotResult } from './herdrTypes';
 import { HerdrPanel, PanelAction } from './panel';
 import { ActivityTarget, ActivityWatcher } from './activity';
-import { buildViewState, paneName } from './viewState';
+import { buildViewState, paneName, ViewConnection } from './viewState';
 import { agentLogo } from './agentLogos';
 import { gitInfo } from './gitInfo';
 import { isMounted, mountSpace, unmountSpace } from './folders';
-import { AttachTerminals, resolveBinary } from './terminals';
+import { AttachTerminals } from './terminals';
+import { backoffDelay, binaryFound, diagnose, Diagnosis, DownReason, herdrEnv, resolveBinary, serverStatus, startServer } from './connection';
+import { HERDR_PROTOCOL } from './herdrTypes';
 import { reviewChanges } from './review';
 import { showHelp } from './help';
 import { HerdrActions } from './herdrActions';
@@ -21,6 +23,24 @@ import { codexBinary, codexLiveUsage, ProviderUsage, readUsage } from './usage';
 import { setUpClaudeUsage } from './usageSetup';
 
 const MANAGED_KEY = 'herdr.managedWindow';
+const REVEALED_KEY = 'herdr.hubViewRevealed';
+
+/** The extension's view of the Herdr server. */
+export type Conn =
+  | { kind: 'connecting' }
+  | { kind: 'connected'; protocol?: number; version?: string }
+  | { kind: 'reconnecting'; since: number }
+  | { kind: 'starting' }
+  | ({ kind: 'down' } & Diagnosis);
+
+/** One line per reason Herdr is unreachable (status bar, menus). */
+const DOWN_TEXT: Record<DownReason, string> = {
+  'not-installed': "Herdr isn't installed.",
+  'not-running': "Herdr isn't running.",
+  crashed: 'Herdr stopped unexpectedly.',
+  incompatible: "This Herdr version isn't compatible with Herdr Hub.",
+  unreachable: "Herdr is running but isn't answering.",
+};
 /** terminal.integrated.defaultProfile.<key> for this OS. */
 const PLATFORM_KEY = process.platform === 'darwin' ? 'osx' : process.platform === 'win32' ? 'windows' : 'linux';
 /** Only task terminals get a description; others show just their name. */
@@ -47,6 +67,9 @@ const PANEL_COMMANDS: Record<string, string> = {
   openTui: 'herdr.openTui',
   refresh: 'herdr.refresh',
   setupHub: 'herdr.setupHub',
+  startServer: 'herdr.startServer',
+  copyDiagnostics: 'herdr.copyDiagnostics',
+  openInstallDocs: 'herdr.openInstallDocs',
 };
 
 export function activate(ctx: vscode.ExtensionContext) {
@@ -85,7 +108,6 @@ export function activate(ctx: vscode.ExtensionContext) {
   status.show();
 
   let model: Model | undefined;
-  let connected = false;
   let eventsLive = false;
   let sub: Subscription | undefined;
   let lastStatus = new Map<string, AgentStatus | undefined>();
@@ -101,7 +123,21 @@ export function activate(ctx: vscode.ExtensionContext) {
   // git reads each repo's own config; only run it once the window is trusted (see gitInfo.ts).
   const git = (cwd?: string) => (vscode.workspace.isTrusted ? gitInfo(cwd, scheduleRender) : undefined);
 
-  // ---------- sync loop ----------
+  // ---------- connection ----------
+  // connecting (startup) / connected → request fails → reconnecting: keep the last view, greyed, for a few
+  // seconds (Herdr updates hand off live) → down: diagnose why (connection.ts) and keep retrying with backoff.
+  const RECONNECT_GRACE_MS = 4000;
+  const socketPath = () => resolveSocketPath(cfg().get<string>('socketPath'));
+  const binary = () => resolveBinary(cfg().get<string>('binaryPath'));
+  const herdrEnvNow = () => herdrEnv(cfg().get<string>('socketPath') || undefined);
+  let conn: Conn = { kind: 'connecting' };
+  let failures = 0;
+  let lastDiagnosis = 0;
+  /** The space whose tabs were open when Herdr went away, to offer reopening them. */
+  let lostSpace: { id: string; label: string } | undefined;
+  let lostNotified = false;
+  const isConnected = () => conn.kind === 'connected';
+
   let inFlight = false;
   let again = false;
   async function refresh() {
@@ -113,19 +149,182 @@ export function activate(ctx: vscode.ExtensionContext) {
     try {
       do {
         again = false;
-        apply(normalize(await client.request<SessionSnapshotResult>('session.snapshot')));
-        if (!connected) log.appendLine('connected to herdr');
-        connected = true;
+        const res = await client.request<SessionSnapshotResult>('session.snapshot');
+        const next = normalize(res);
+        const wasConnected = isConnected();
+        conn = { kind: 'connected', protocol: res.snapshot.protocol, version: res.snapshot.version };
+        failures = 0;
+        apply(next);
+        if (!wasConnected) onConnected();
+        // Panes came or went: move the live subscription to the new set. (Only a live one: restarting a
+        // failed stream is the poll's job, so a stream that keeps failing can't loop through here.)
+        if (sub && paneIdsOf(next).join(' ') !== subscribedPanes) startEvents();
       } while (again);
-    } catch (e: any) {
-      if (connected) log.appendLine(`lost herdr: ${e?.message ?? e}`);
-      connected = false;
-      model = undefined;
-      render();
-      renderStatus();
+    } catch (e) {
+      await onFailure(e);
     } finally {
       inFlight = false;
     }
+  }
+
+  function onConnected() {
+    log.appendLine(`connected to herdr ${conn.kind === 'connected' ? (conn.version ?? '') : ''}`.trim());
+    stopWatchingSocket();
+    lostNotified = false;
+    const lost = lostSpace;
+    lostSpace = undefined;
+    if (lost) offerReopen(lost);
+  }
+
+  async function onFailure(e: unknown) {
+    failures++;
+    const now = Date.now();
+    if (conn.kind === 'connected') {
+      log.appendLine(`lost herdr: ${e instanceof Error ? e.message : e}`);
+      const attached = terms.spaces()[0];
+      const sp = model?.spaces.find((s) => s.id === attached);
+      lostSpace = sp ? { id: sp.id, label: sp.label } : undefined;
+      conn = { kind: 'reconnecting', since: now };
+      render();
+      renderStatus();
+      return;
+    }
+    if (conn.kind === 'starting') return; // startHerdr owns the state until it's done
+    if (conn.kind === 'reconnecting' && now - conn.since < RECONNECT_GRACE_MS) return;
+    const lost = conn.kind === 'reconnecting';
+    // Diagnosing runs `herdr status`; while it stays down, do that at most every 10s.
+    if (conn.kind === 'down' && now - lastDiagnosis < 10_000) return;
+    lastDiagnosis = now;
+    const before = conn.kind === 'down' ? conn.reason : undefined;
+    model = undefined;
+    conn = { kind: 'down', ...(await diagnose(binary(), socketPath(), !!cfg().get<string>('socketPath'), herdrEnvNow(), e)) };
+    if (conn.reason !== before) log.appendLine(`herdr unavailable: ${conn.reason}${conn.detail ? ` (${conn.detail})` : ''}`);
+    render();
+    renderStatus();
+    watchSocket();
+    if (lost && !lostNotified) notifyLost();
+  }
+
+  /** Herdr was connected and went away: say so once, since the agents stopped with it. */
+  async function notifyLost() {
+    if (conn.kind !== 'down') return;
+    lostNotified = true;
+    const msg =
+      conn.reason === 'crashed'
+        ? 'Herdr stopped unexpectedly. Your agents run inside Herdr, so they stopped too.'
+        : conn.reason === 'not-running'
+          ? 'Herdr stopped. Your agents run inside Herdr, so they stopped too.'
+          : `Lost the connection to Herdr${conn.detail ? `: ${conn.detail}` : ''}.`;
+    const pick = await vscode.window.showWarningMessage(msg, ...(conn.reason === 'not-running' || conn.reason === 'crashed' ? ['Start Herdr', 'Open Herdr TUI'] : ['Retry']));
+    if (pick === 'Start Herdr') startHerdr();
+    else if (pick === 'Open Herdr TUI') vscode.commands.executeCommand('herdr.openTui');
+    else if (pick === 'Retry') kick();
+  }
+
+  /** Back after an outage: the space's tabs died with Herdr; offer to open them again. */
+  async function offerReopen(lost: { id: string; label: string }) {
+    if (!terms.hasExited()) return; // a quick handoff: the tabs survived
+    const pick = await vscode.window.showInformationMessage(`Herdr is back. Reopen the tabs for ${lost.label}?`, 'Reopen Tabs');
+    if (!pick) return;
+    terms.disposeExited();
+    // Pane (and possibly space) ids change when Herdr restarts; fall back to the name.
+    const sp = model?.spaces.find((s) => s.id === lost.id) ?? model?.spaces.find((s) => s.label === lost.label);
+    if (sp) await switchTo(sp);
+    else vscode.window.showWarningMessage(`Herdr: "${lost.label}" isn't in Herdr anymore.`);
+  }
+
+  // Poll: fast without an event stream, slowly as a safety net with one, backing off while Herdr is down.
+  let pollTimer: NodeJS.Timeout | undefined;
+  function schedulePoll() {
+    clearTimeout(pollTimer);
+    const delay = isConnected() ? (eventsLive ? 15_000 : 1500) : conn.kind === 'reconnecting' ? 1000 : backoffDelay(failures);
+    pollTimer = setTimeout(async () => {
+      await refresh();
+      startEvents();
+      schedulePoll();
+    }, delay);
+  }
+  /** Try right now (Retry, window focus, sidebar shown, socket appeared, Herdr started). */
+  async function kick() {
+    clearTimeout(pollTimer);
+    lastDiagnosis = 0;
+    await refresh();
+    startEvents();
+    schedulePoll();
+  }
+
+  // While Herdr is down, reconnect the moment its socket appears.
+  let socketWatch: fs.FSWatcher | undefined;
+  function watchSocket() {
+    if (socketWatch) return;
+    try {
+      socketWatch = fs.watch(path.dirname(socketPath()), () => {
+        if (!isConnected() && !inFlight && fs.existsSync(socketPath())) kick();
+      });
+    } catch {
+      // The folder doesn't exist yet: backoff polling covers it.
+    }
+  }
+  function stopWatchingSocket() {
+    socketWatch?.close();
+    socketWatch = undefined;
+  }
+
+  /** Start the headless server in the background (it outlives VS Code), then connect. */
+  async function startHerdr(): Promise<boolean> {
+    if (isConnected()) return true;
+    const bin = binary();
+    if (!binaryFound(bin)) {
+      const pick = await vscode.window.showErrorMessage(`Herdr isn't installed (looked for ${bin}).`, 'Install Herdr', 'Settings');
+      if (pick === 'Install Herdr') vscode.commands.executeCommand('herdr.openInstallDocs');
+      else if (pick === 'Settings') vscode.commands.executeCommand('herdr.openSettings');
+      return false;
+    }
+    const prev = conn;
+    conn = { kind: 'starting' };
+    render();
+    renderStatus();
+    const logFile = vscode.Uri.joinPath(ctx.globalStorageUri, 'herdr-server.log').fsPath;
+    const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Starting Herdr…' }, () =>
+      startServer(bin, herdrEnvNow(), logFile),
+    );
+    conn = prev.kind === 'starting' ? { kind: 'connecting' } : prev;
+    if (!r.ok) {
+      log.appendLine(`start herdr failed: ${r.error}`);
+      render();
+      renderStatus();
+      const pick = await vscode.window.showErrorMessage(`Herdr: couldn't start the server. ${r.error ?? ''}`, 'Show Log');
+      if (pick) vscode.window.showTextDocument(vscode.Uri.file(logFile));
+      return false;
+    }
+    log.appendLine(r.already ? 'herdr was already running' : `started herdr server in the background (log: ${logFile})`);
+    await kick();
+    return isConnected();
+  }
+
+  /** The hub window opened with Herdr stopped: start it, per herdr.startServer (asked once, then remembered). */
+  async function maybeAutoStart() {
+    if (!isHubWindow() || conn.kind !== 'down' || (conn.reason !== 'not-running' && conn.reason !== 'crashed')) return;
+    const mode = cfg().get<'ask' | 'always' | 'never'>('startServer', 'ask');
+    if (mode === 'never') return;
+    if (mode === 'always') return void startHerdr();
+    const pick = await vscode.window.showInformationMessage(
+      "Herdr isn't running. Start it in the background whenever the Herdr Hub window opens?",
+      'Always Start Herdr',
+      'Not Now',
+      'Never',
+    );
+    if (pick === 'Always Start Herdr') {
+      await cfg().update('startServer', 'always', vscode.ConfigurationTarget.Global);
+      startHerdr();
+    } else if (pick === 'Never') await cfg().update('startServer', 'never', vscode.ConfigurationTarget.Global);
+  }
+
+  /** Herdr isn't connected: offer to start it. True once connected. */
+  async function ensureConnected(): Promise<boolean> {
+    if (isConnected()) return true;
+    const pick = await vscode.window.showWarningMessage("Herdr isn't running.", 'Start Herdr');
+    return pick ? startHerdr() : false;
   }
 
   let debounce: NodeJS.Timeout | undefined;
@@ -134,27 +333,33 @@ export function activate(ctx: vscode.ExtensionContext) {
     debounce = setTimeout(refresh, 120);
   };
 
+  // Agent status events are per pane (see subscriptionsFor), so the subscription follows the pane set.
+  const paneIdsOf = (m: Model | undefined) => (m?.spaces ?? []).flatMap((s) => s.tabs.flatMap((t) => t.panes.map((p) => p.id)));
+  let subscribedPanes = '';
   function startEvents() {
-    if (sub || !connected) return;
-    sub = client.subscribe(
-      DEFAULT_SUBSCRIPTIONS,
+    const panes = paneIdsOf(model);
+    const key = panes.join(' ');
+    if (sub && key !== subscribedPanes) {
+      sub.dispose(); // dispose() doesn't call onEnd: no "ended" log, no fast polling
+      sub = undefined;
+    }
+    if (sub || !isConnected()) return;
+    subscribedPanes = key;
+    const self: Subscription = client.subscribe(
+      subscriptionsFor(panes),
       () => scheduleRefresh(),
       (err) => {
+        if (sub !== self) return;
         sub = undefined;
         if (eventsLive || err) log.appendLine(`event stream ended${err ? `: ${err.message}` : ''}; polling`);
         eventsLive = false;
         scheduleRefresh(); // events_lost or reconnect => re-read authoritative state
+        schedulePoll(); // poll fast again until the stream is back
       },
     );
+    sub = self;
     eventsLive = true;
   }
-
-  // Poll fast while there's no event stream, slowly as a safety net when there is.
-  let ticks = 0;
-  const poller = setInterval(() => {
-    ticks++;
-    if (!eventsLive || ticks % 10 === 0) refresh().then(startEvents);
-  }, 1500);
 
   // ---------- sidebar ----------
   function render() {
@@ -168,6 +373,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         attached: (id) => terms.has(id),
         activity: (id) => activity.get(id),
         usage,
+        connection: { ...(conn as object), kind: conn.kind, expectedProtocol: HERDR_PROTOCOL } as ViewConnection,
       }),
     );
   }
@@ -280,10 +486,14 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   function renderStatus() {
-    if (!connected || !model) {
-      status.text = '$(debug-disconnect) herdr';
-      status.tooltip = 'Herdr server not reachable — click to retry';
-      status.command = 'herdr.refresh';
+    if (!isConnected() || !model) {
+      // Nothing current to count: no stale badge or "blocked" color while Herdr is away.
+      panel.badge = undefined;
+      status.backgroundColor = undefined;
+      status.text = conn.kind === 'down' ? '$(debug-disconnect) Herdr' : `$(sync~spin) ${conn.kind === 'starting' ? 'Starting Herdr' : 'Herdr'}`;
+      status.tooltip =
+        conn.kind === 'down' ? `${DOWN_TEXT[conn.reason]} Click for options.` : conn.kind === 'starting' ? 'Starting Herdr…' : 'Connecting to Herdr…';
+      status.command = 'herdr.connectionMenu';
       vscode.commands.executeCommand('setContext', 'herdr.connected', false);
       return;
     }
@@ -369,8 +579,12 @@ export function activate(ctx: vscode.ExtensionContext) {
   const spaceFrom = async (t?: Target): Promise<Space | undefined> => {
     const hit = model?.spaces.find((s) => s.id === t?.spaceId) ?? paneOf(t)?.space;
     if (hit) return hit;
+    if (!isConnected()) {
+      if (await ensureConnected()) return spaceFrom(t);
+      return;
+    }
     if (!model?.spaces.length) {
-      vscode.window.showWarningMessage('Herdr: no spaces (is the server running?)');
+      vscode.window.showWarningMessage('Herdr: no spaces yet. Create one with the + next to Spaces.');
       return;
     }
     const pick = await vscode.window.showQuickPick(
@@ -402,6 +616,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     agentNames: () => model?.spaces.flatMap((s) => s.agents.map((a) => a.raw.agent?.name).filter((n): n is string => !!n)) ?? [],
     agents: () => cfg().get<string[]>('agents', ['claude', 'codex', 'kiro', 'cursor']),
     renameTerminal: (paneId, name) => terms.rename(paneId, name),
+    ensureConnected: () => ensureConnected(),
     log: (m) => log.appendLine(m),
   };
   /** A space or pane from a sidebar/context-menu target. */
@@ -425,14 +640,22 @@ export function activate(ctx: vscode.ExtensionContext) {
       targetSpace,
       binary: () => resolveBinary(cfg().get<string>('binaryPath')),
       adopt: (paneId, spaceId, term) => terms.adopt(paneId, spaceId, term),
+      startHerdr: () => startHerdr(),
     }),
     log,
     panel,
     vscode.window.registerWebviewViewProvider(HerdrPanel.viewId, panel),
-    panel.onDidChangeVisibility((visible) => visible && (render(), pollActivity(), pollUsage())),
+    panel.onDidChangeVisibility((visible) => {
+      if (!visible) return;
+      if (!isConnected()) kick();
+      render();
+      pollActivity();
+      pollUsage();
+    }),
+    vscode.window.onDidChangeWindowState((w) => w.focused && !isConnected() && kick()),
     status,
     terms,
-    { dispose: () => { clearInterval(poller); clearInterval(redrawTimer); clearInterval(activityTimer); clearInterval(usageTimer); clearTimeout(renderTimer); sub?.dispose(); } },
+    { dispose: () => { clearTimeout(pollTimer); clearInterval(redrawTimer); clearInterval(activityTimer); clearInterval(usageTimer); clearTimeout(renderTimer); stopWatchingSocket(); sub?.dispose(); } },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('herdr')) return;
       render();
@@ -441,7 +664,38 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.workspace.onDidChangeWorkspaceFolders(() => render()),
     vscode.workspace.onDidGrantWorkspaceTrust(() => render()),
 
-    vscode.commands.registerCommand('herdr.refresh', () => refresh().then(startEvents)),
+    vscode.commands.registerCommand('herdr.refresh', () => kick()),
+    vscode.commands.registerCommand('herdr.startServer', () => startHerdr()),
+    vscode.commands.registerCommand('herdr.openInstallDocs', () => vscode.env.openExternal(vscode.Uri.parse('https://herdr.dev'))),
+    vscode.commands.registerCommand('herdr.copyDiagnostics', async () => {
+      const st = await serverStatus(binary(), herdrEnvNow());
+      const text = [
+        `Herdr Hub ${ctx.extension.packageJSON.version} · VS Code ${vscode.version} · ${process.platform}`,
+        `connection: ${JSON.stringify(conn)}`,
+        `binary: ${binary()} (${binaryFound(binary()) ? 'found' : 'NOT FOUND'})`,
+        `socket: ${socketPath()}${cfg().get<string>('socketPath') ? ' (herdr.socketPath)' : ''} (${fs.existsSync(socketPath()) ? 'exists' : 'missing'})`,
+        `herdr status server: ${st ? JSON.stringify(st) : 'no answer'}`,
+        `expected protocol: ${HERDR_PROTOCOL}`,
+      ].join('\n');
+      await vscode.env.clipboard.writeText(text);
+      vscode.window.showInformationMessage('Herdr Hub: diagnostics copied to the clipboard.');
+    }),
+    vscode.commands.registerCommand('herdr.connectionMenu', async () => {
+      if (isConnected()) return vscode.commands.executeCommand('herdr.focusAttention');
+      const down = conn.kind === 'down' ? conn : undefined;
+      type Item = vscode.QuickPickItem & { cmd: string };
+      const items: Item[] = [
+        ...(down?.reason === 'not-installed'
+          ? [{ label: '$(link-external) Install Herdr', cmd: 'herdr.openInstallDocs' }]
+          : [{ label: '$(play) Start Herdr', description: 'in the background', cmd: 'herdr.startServer' }]),
+        { label: '$(window) Open Herdr TUI', cmd: 'herdr.openTui' },
+        { label: '$(refresh) Retry', cmd: 'herdr.refresh' },
+        { label: '$(copy) Copy Diagnostics', cmd: 'herdr.copyDiagnostics' },
+        { label: '$(settings-gear) Settings', cmd: 'herdr.openSettings' },
+      ];
+      const pick = await vscode.window.showQuickPick(items, { title: down ? DOWN_TEXT[down.reason] : 'Connecting to Herdr…' });
+      if (pick) vscode.commands.executeCommand(pick.cmd);
+    }),
 
     vscode.commands.registerCommand('herdr.switchSpace', async (t?: Target) => {
       const sp = await spaceFrom(t);
@@ -528,7 +782,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         location: { viewColumn: vscode.ViewColumn.Active },
       });
       t.show();
-      setTimeout(() => refresh().then(startEvents), 1500);
+      setTimeout(() => kick(), 1500);
     }),
     vscode.commands.registerCommand('herdr.toggleFollow', async () => {
       const on = !cfg().get<boolean>('followMode', true);
@@ -596,9 +850,20 @@ export function activate(ctx: vscode.ExtensionContext) {
     once('tabs.description', HUB_TAB_DESCRIPTION);
     once(`defaultProfile.${PLATFORM_KEY}`, SHELL_PROFILE_TITLE);
     if (!vscode.workspace.isTrusted) log.appendLine('hub workspace is not trusted: VS Code ignores its default terminal profile, so "+" opens local shells');
+    // Open the sidebar the first time this hub window opens. Editors with a horizontal activity bar (Cursor) hide
+    // extension icons behind an overflow menu, so new users can't find it. Once only: after that, wherever the
+    // user put (or closed) the view is left alone.
+    if (!ctx.workspaceState.get<boolean>(REVEALED_KEY)) {
+      ctx.workspaceState.update(REVEALED_KEY, true);
+      vscode.commands.executeCommand('herdr.spaces.focus').then(undefined, (e) => log.appendLine(`could not open the sidebar: ${e?.message ?? e}`));
+    }
   }
 
-  refresh().then(startEvents);
+  refresh().then(() => {
+    startEvents();
+    schedulePoll();
+    maybeAutoStart();
+  });
 }
 
 export function deactivate() {}

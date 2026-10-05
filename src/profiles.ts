@@ -24,24 +24,35 @@ export interface ProfileDeps extends ManageDeps {
   targetSpace(): Promise<Space | undefined>;
   binary(): string;
   adopt(paneId: string, spaceId: string, term: vscode.Terminal): void;
+  startHerdr(): Promise<boolean>;
 }
 
 /** A normal login shell, for when Herdr can't take the terminal. */
-function localShell(reason: string): vscode.TerminalProfile {
-  vscode.window.showWarningMessage(`Herdr: ${reason} Opened a local shell instead.`);
+function localShell(): vscode.TerminalProfile {
   const shell = process.env.SHELL || '/bin/zsh';
   return new vscode.TerminalProfile({ name: path.basename(shell), shellPath: shell, shellArgs: ['-l'] });
 }
 
 export function registerProfiles(deps: ProfileDeps): vscode.Disposable {
+  // Say why "+" opened a plain shell, once per session (not on every click).
+  let warned = false;
+  const fallback = (reason: string): vscode.TerminalProfile => {
+    if (!warned) {
+      warned = true;
+      vscode.window.showWarningMessage(`Herdr: ${reason} "+" opens local shells until it's back.`, 'Start Herdr').then((pick) => {
+        if (pick) deps.startHerdr();
+      });
+    }
+    return localShell();
+  };
   /** terminal_id -> pane we created for a profile terminal, until VS Code opens that terminal. */
   const pending = new Map<string, { paneId: string; spaceId: string; kind?: string; where: string }>();
 
   const provide = async (p: (typeof PROFILES)[number]): Promise<vscode.TerminalProfile> => {
     const kind = p.pick ? await pickAgent(deps, 'New agent tab') : p.kind;
-    if (p.pick && !kind) return localShell('no agent chosen.');
+    if (p.pick && !kind) return localShell();
     const space = await deps.targetSpace();
-    if (!space) return localShell("isn't reachable, or no space was chosen.");
+    if (!space) return fallback("isn't running, or no space was chosen.");
     try {
       const { tab, pane } = await deps.actions.createTab({
         workspace_id: space.id,
@@ -63,7 +74,7 @@ export function registerProfiles(deps: ProfileDeps): vscode.Disposable {
       });
     } catch (e) {
       deps.log(`profile ${p.id}: ${e instanceof Error ? e.message : e}`);
-      return localShell(`couldn't create a tab in ${space.label}.`);
+      return fallback(`couldn't create a tab in ${space.label}.`);
     }
   };
 

@@ -2,7 +2,7 @@
   "name": "herdr-hub",
   "displayName": "Herdr Hub",
   "description": "Herdr spaces and agents inside one VS Code window: switch spaces, attach agents as editor tabs, review agent changes.",
-  "version": "0.0.20",
+  "version": "0.0.26",
   "publisher": "srihari-local",
   "license": "MIT",
   "repository": {
@@ -157,6 +157,27 @@
         "command": "herdr.setKiroCredits",
         "title": "Set Kiro Monthly Credits…",
         "category": "Herdr Hub"
+      },
+      {
+        "command": "herdr.startServer",
+        "title": "Start Herdr",
+        "category": "Herdr Hub",
+        "icon": "$(play)"
+      },
+      {
+        "command": "herdr.copyDiagnostics",
+        "title": "Copy Diagnostics",
+        "category": "Herdr Hub"
+      },
+      {
+        "command": "herdr.connectionMenu",
+        "title": "Connection Options",
+        "category": "Herdr Hub"
+      },
+      {
+        "command": "herdr.openInstallDocs",
+        "title": "Install Herdr",
+        "category": "Herdr Hub"
       }
     ],
     "menus": {
@@ -165,6 +186,11 @@
           "command": "herdr.openHelp",
           "when": "view == herdr.spaces",
           "group": "navigation@1"
+        },
+        {
+          "command": "herdr.startServer",
+          "when": "view == herdr.spaces && !herdr.connected",
+          "group": "0_start@1"
         },
         {
           "command": "herdr.toggleFollow",
@@ -220,6 +246,14 @@
         },
         {
           "command": "herdr.closeInHerdr",
+          "when": "false"
+        },
+        {
+          "command": "herdr.connectionMenu",
+          "when": "false"
+        },
+        {
+          "command": "herdr.openInstallDocs",
           "when": "false"
         }
       ],
@@ -285,6 +319,21 @@
           "default": "",
           "description": "Herdr socket path. Empty = HERDR_SOCKET_PATH, then ~/.config/herdr/herdr.sock. Machine setting: ignored in workspace and folder settings.",
           "scope": "machine"
+        },
+        "herdr.startServer": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "always",
+            "never"
+          ],
+          "default": "ask",
+          "enumDescriptions": [
+            "Ask once when the hub window opens and Herdr isn't running, then remember the answer.",
+            "Start Herdr in the background whenever the hub window opens and it isn't running.",
+            "Never start Herdr automatically (the sidebar still offers a Start Herdr button)."
+          ],
+          "description": "Whether the Herdr Hub window starts the Herdr server (in the background) when it isn't running."
         },
         "herdr.followMode": {
           "type": "boolean",
@@ -417,7 +466,7 @@
     "gen:icons": "node scripts/gen-agent-icons.mjs",
     "codicons": "node scripts/copy-codicons.mjs",
     "pretest": "tsc -p .",
-    "test": "node out/test/mockTest.js && node out/test/viewTest.js && node out/test/usageTest.js && node out/test/gitTest.js",
+    "test": "node out/test/mockTest.js && node out/test/viewTest.js && node out/test/usageTest.js && node out/test/connectionTest.js && node out/test/gitTest.js",
     "package": "npm run codicons && tsc -p . && vsce package --allow-missing-repository --skip-license",
     "install-local": "npm run package && code --install-extension herdr-hub-$npm_package_version.vsix --force"
   },

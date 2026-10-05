@@ -30,6 +30,8 @@ export interface ManageDeps {
   /** Agents listed first when choosing (setting herdr.agents). */
   agents(): string[];
   renameTerminal(paneId: string, name: string): Promise<void>;
+  /** Herdr is connected, offering to start it if not. */
+  ensureConnected(): Promise<boolean>;
   log(msg: string): void;
 }
 
@@ -99,6 +101,7 @@ async function openCreated(deps: ManageDeps, paneId: string, what: What, where: 
 }
 
 export async function newTab(deps: ManageDeps, space: Space, what?: What) {
+  if (!(await deps.ensureConnected())) return;
   what ??= await pickWhat(deps, `New tab in ${space.label}`);
   if (!what) return;
   try {
@@ -115,6 +118,7 @@ export async function newTab(deps: ManageDeps, space: Space, what?: What) {
 
 /** New space: in a folder you pick, or on a new git worktree of an existing space's repo. */
 export async function newSpace(deps: ManageDeps) {
+  if (!(await deps.ensureConnected())) return;
   const title = 'New space';
   type Item = vscode.QuickPickItem & { folder?: boolean; from?: Space };
   const repos = deps.spaces().filter((s) => s.cwd && deps.branchOf(s.cwd));

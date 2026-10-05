@@ -4,6 +4,7 @@
 import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
+import type { Subscription as EventSubscription } from './herdrTypes';
 
 export class HerdrError extends Error {
   constructor(public code: string, message: string) {
@@ -87,7 +88,7 @@ export class HerdrClient {
    * callers should treat events as "something changed, re-read" signals
    * (that's what Herdr's docs recommend). onEnd fires once on close/error.
    */
-  subscribe(subscriptions: object[], onEvent: (ev: any) => void, onEnd: (err?: Error) => void): Subscription {
+  subscribe(subscriptions: readonly EventSubscription[], onEvent: (ev: any) => void, onEnd: (err?: Error) => void): Subscription {
     const id = nextId('sub');
     const sock = net.createConnection(this.socketPath());
     sock.setEncoding('utf8');
@@ -124,21 +125,43 @@ export class HerdrClient {
   }
 }
 
-/** Lifecycle events that should trigger a refresh of our cached model. */
-export const DEFAULT_SUBSCRIPTIONS = [
+/**
+ * Lifecycle events that should trigger a refresh of our cached model. These take no parameters.
+ * Not `pane.updated`: it fires on every terminal-title change, and agents animate their titles.
+ */
+const LIFECYCLE_EVENTS = [
   'workspace.created',
   'workspace.closed',
   'workspace.renamed',
   'workspace.focused',
   'workspace.updated',
+  'workspace.metadata_updated',
+  'workspace.moved',
+  'workspace.reordered',
+  'worktree.created',
+  'worktree.opened',
+  'worktree.removed',
   'tab.created',
   'tab.closed',
   'tab.focused',
   'tab.renamed',
+  'tab.moved',
   'pane.created',
   'pane.closed',
   'pane.moved',
   'pane.exited',
   'pane.agent_detected',
-  'pane.agent_status_changed',
-].map((type) => ({ type }));
+] as const;
+
+// Typed against the generated schema: a pane-scoped event here (one that needs a pane_id) fails to compile.
+export const DEFAULT_SUBSCRIPTIONS: readonly EventSubscription[] = LIFECYCLE_EVENTS.map((type) => ({ type }));
+
+/**
+ * The full events.subscribe list: the lifecycle events plus each pane's agent status. Verified against
+ * herdr 0.9.1: status changes fire no global event, `pane.agent_status_changed` requires a `pane_id`, and
+ * one unknown pane id rejects the whole request (`pane_not_found`). So subscribe with the panes of the
+ * latest snapshot and resubscribe when they change.
+ */
+export function subscriptionsFor(paneIds: readonly string[]): EventSubscription[] {
+  return [...DEFAULT_SUBSCRIPTIONS, ...paneIds.map((pane_id) => ({ type: 'pane.agent_status_changed' as const, pane_id }))];
+}

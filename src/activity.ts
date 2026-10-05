@@ -55,7 +55,11 @@ const shortCommand = (cmd: string) =>
     .join(' ');
 const clean = (lines: string[]) => lines.map((l) => l.replace(EDGES, '')).filter((l) => l && !RULE.test(l));
 
-export const isShellProcess = (name: string) => SHELLS.has(base(name).replace(/^-/, '').toLowerCase());
+/**
+ * "zsh", "-zsh", "/bin/zsh" and wrapped shells like Kiro's "zsh (kiro-cli-term)" are shells. macOS truncates
+ * process names to 15 characters ("zsh (kiro-cli-t"), so drop everything from " (" on.
+ */
+export const isShellProcess = (name: string) => SHELLS.has(base(name.replace(/\s*\(.*$/, '')).replace(/^-/, '').toLowerCase());
 
 /** The process that owns the terminal: the foreground group leader, else the last non-shell. */
 export function leaderProcess(info?: PaneProcessInfo): PaneProcessInfoProcess | undefined {

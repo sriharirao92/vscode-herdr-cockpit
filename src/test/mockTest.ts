@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as assert from 'assert';
-import { HerdrClient, HerdrError, DEFAULT_SUBSCRIPTIONS } from '../herdrClient';
+import { HerdrClient, HerdrError, DEFAULT_SUBSCRIPTIONS, subscriptionsFor } from '../herdrClient';
 import { normalize } from '../model';
 import { ActivityWatcher } from '../activity';
 import { HerdrActions, agentName, agentTitle } from '../herdrActions';
@@ -121,11 +121,18 @@ const server = net.createServer((c) => {
           calls.push(req);
           reply({ result: { type: 'ok' } });
           break;
-        case 'events.subscribe':
+        case 'events.subscribe': {
+          // Like herdr 0.9.1: pane-scoped events need a pane_id, and one unknown pane rejects the whole request.
           assert.ok(Array.isArray(req.params.subscriptions));
+          const PANE_SCOPED = ['pane.agent_status_changed', 'pane.output_matched', 'pane.scroll_changed'];
+          const bad = req.params.subscriptions.find((x: any) => PANE_SCOPED.includes(x.type) && !x.pane_id);
+          if (bad) { reply({ error: { code: 'invalid_request', message: 'invalid request: missing field `pane_id`' } }); break; }
+          const unknown = req.params.subscriptions.find((x: any) => x.pane_id && !snapshot.snapshot.panes.some((p) => p.pane_id === x.pane_id));
+          if (unknown) { reply({ error: { code: 'pane_not_found', message: `pane ${unknown.pane_id} not found` } }); break; }
           reply({ result: { type: 'subscription_started' } });
           subscriber = c;
           break;
+        }
         default:
           reply({ error: { code: 'unknown_method', message: req.method } });
       }
@@ -293,6 +300,18 @@ async function main() {
   });
   assert.ok(err instanceof HerdrError && err.code === 'events_lost');
   console.log('✓ events_lost surfaces as error');
+
+  // 5b. agent status is subscribed per pane: the snapshot's panes are accepted, a stale pane id is not
+  const subscribeResult = (subs: Parameters<HerdrClient['subscribe']>[0]) =>
+    new Promise<string>((resolve) => {
+      const s = client.subscribe(subs, () => {}, (e) => resolve(e instanceof HerdrError ? e.code : 'closed'));
+      setTimeout(() => { s.dispose(); resolve('live'); }, 100);
+    });
+  const livePanes = snapshot.snapshot.panes.map((p) => p.pane_id);
+  assert.strictEqual(await subscribeResult(subscriptionsFor(livePanes)), 'live');
+  assert.strictEqual(subscriptionsFor(livePanes).filter((x) => x.type === 'pane.agent_status_changed').length, livePanes.length);
+  assert.strictEqual(await subscribeResult(subscriptionsFor([...livePanes, 'w9:p9'])), 'pane_not_found');
+  console.log('✓ per-pane agent status subscriptions (stale pane id rejected)');
 
   // 6. no server -> rejects quickly
   const dead = new HerdrClient(() => sock + '.missing');

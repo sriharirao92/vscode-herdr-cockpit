@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as assert from 'assert';
-import { describeProcess, summarizeAgent, summarizeShell } from '../activity';
+import { describeProcess, isShellProcess, summarizeAgent, summarizeShell } from '../activity';
 import * as vm from 'vm';
 import { attachOrder, normalize } from '../model';
 import { buildViewState, headline, paneName } from '../viewState';
@@ -21,6 +21,7 @@ assert.strictEqual(
 assert.strictEqual(describeProcess({ pid: 1, name: 'vim', argv: ['vi', '/Users/dev/code/api-service/config.yaml'] }), 'vi config.yaml');
 assert.strictEqual(describeProcess({ pid: 1, name: 'node', argv: ['/opt/homebrew/bin/npm', 'run', 'dev'] }), 'npm run dev');
 assert.strictEqual(describeProcess({ pid: 1, name: 'python3', argv: ['python3', '-m', 'http.server', '8000'] }), 'python3 -m http.server');
+assert.ok(isShellProcess('zsh (kiro-cli-term)') && isShellProcess('zsh (kiro-cli-t') && isShellProcess('-zsh') && !isShellProcess('python'), 'wrapped shells are shells, even with the name truncated');
 console.log('✓ describeProcess');
 
 // ---- shell at prompt: last command, its output, failure detection
@@ -76,6 +77,7 @@ const vs = buildViewState({
   since: () => undefined, git: () => undefined, mounted: (sp) => sp.id === 'w6', attached: () => false,
   activity: (id) => acts[id],
   usage: ['claude', 'codex', 'kiro', 'gemini'].map((id) => ({ id, name: id, windows: [] })),
+  connection: { kind: 'connected', expectedProtocol: 22 },
 });
 const sp = (id: string) => vs.spaces.find((x) => x.id === id)!;
 assert.strictEqual(vs.totals.agents, 5);
@@ -90,7 +92,7 @@ assert.strictEqual(sp('w6').mounted, true);
 assert.strictEqual(sp('w8').agents.length, 0);
 assert.deepStrictEqual(vs.attention, []);
 assert.deepStrictEqual(vs.usage.map((u) => u.id), ['claude', 'kiro'], 'usage only for agents running in Herdr (fixture: claude, kiro)');
-const hidden = buildViewState({ model, showShells: false, since: () => undefined, git: () => undefined, mounted: () => false, attached: () => false, activity: () => undefined, usage: [] });
+const hidden = buildViewState({ model, showShells: false, since: () => undefined, git: () => undefined, mounted: () => false, attached: () => false, activity: () => undefined, usage: [], connection: { kind: 'connected', expectedProtocol: 22 } });
 assert.ok(hidden.spaces.every((x) => x.shells.length === 0));
 console.log('✓ view state from real snapshot');
 

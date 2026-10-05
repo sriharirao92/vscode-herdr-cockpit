@@ -17,12 +17,18 @@ Herdr spaces and agents inside **one** VS Code window.
 ## Install
     code --install-extension herdr-hub-<version>.vsix
 
+Other editors use their own command instead of `code`: `cursor`, `kiro` or `positron`.
+In Cursor, `cursor` isn't on your PATH by default; it's in `Cursor.app/Contents/Resources/app/bin/`.
+
 ## First run
 1. Make sure the Herdr server is running (`herdr` in any terminal, or "Herdr: Open Full Herdr TUI in Editor").
 2. Run **Herdr: Set up Herdr Hub Window**. It opens a workspace whose first folder is `~/.herdr-hub`.
    Slot 0 never changes, so switching spaces never restarts extensions.
    (Any normal window works too; the folder you opened stays in slot 0.)
-3. Click a space in the Herdr sidebar.
+3. Click a space in the Herdr sidebar. The hub window opens the sidebar the first time; elsewhere, click the
+   Herdr Hub icon in the activity bar. In Cursor the activity bar is a row of icons across the top of the
+   sidebar, and Herdr Hub may be behind the **⌄** arrow at its end. The Command Palette always works:
+   **Herdr Hub: Focus on Spaces & Agents View**.
 
 ## Debugging
 - **Herdr: Show Raw Session Snapshot** shows exactly what Herdr returns. Snapshot types are generated

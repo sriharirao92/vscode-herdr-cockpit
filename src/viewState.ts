@@ -6,6 +6,7 @@
 import * as os from 'os';
 import type { PaneActivity } from './activity';
 import type { ProviderUsage } from './usage';
+import type { DownReason } from './connection';
 import type { GitInfo } from './gitInfo';
 import type { AgentStatus, Model, Pane, Space, Tab } from './model';
 import { agentTitle } from './herdrActions';
@@ -65,8 +66,24 @@ export interface SpaceView {
   shells: PaneView[];
 }
 
+/** The connection, as the sidebar shows it (see Conn in extension.ts). */
+export interface ViewConnection {
+  kind: 'connecting' | 'connected' | 'reconnecting' | 'starting' | 'down';
+  reason?: DownReason;
+  socket?: string;
+  customSocket?: boolean;
+  binary?: string;
+  detail?: string;
+  version?: string;
+  protocol?: number;
+  /** The Herdr protocol this build was generated against. */
+  expectedProtocol: number;
+}
+
 export interface ViewState {
+  /** A snapshot is shown (possibly the last one, while reconnecting). */
   connected: boolean;
+  connection: ViewConnection;
   showShells: boolean;
   totals: Record<AgentStatus, number> & { agents: number; shells: number };
   /** Blocked agents first, then done; oldest first within each. */
@@ -85,6 +102,7 @@ export interface ViewInputs {
   attached(paneId: string): boolean;
   activity(paneId: string): PaneActivity | undefined;
   usage: ProviderUsage[];
+  connection: ViewConnection;
 }
 
 const home = os.homedir();
@@ -221,5 +239,5 @@ export function buildViewState(i: ViewInputs): ViewState {
     .sort((a, b) => rank[a.status!]! - rank[b.status!]! || (a.since ?? 0) - (b.since ?? 0));
   // Usage only for the agents running in Herdr right now.
   const running = new Set(spaces.flatMap((s) => s.agents.map((a) => (a.agentKind ?? '').toLowerCase())));
-  return { connected: !!i.model, showShells: i.showShells, totals, attention, spaces, usage: i.usage.filter((u) => running.has(u.id)) };
+  return { connected: !!i.model, connection: i.connection, showShells: i.showShells, totals, attention, spaces, usage: i.usage.filter((u) => running.has(u.id)) };
 }
