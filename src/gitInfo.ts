@@ -29,18 +29,44 @@ const TTL_MS = 8000;
 const cache = new Map<string, { at: number; info?: GitInfo; pending?: Promise<GitInfo | undefined> }>();
 
 /**
- * `git status` runs the command a repository names in `core.fsmonitor` (from its own .git/config), so a
- * repo copied from someone else could run code just by being shown in the sidebar. Always turn it off.
- * (Callers also skip git entirely in untrusted VS Code windows.)
+ * A repository's own config can make read-only git commands run programs: `core.fsmonitor` (status),
+ * `filter.<driver>.clean|process` via .gitattributes (status, for recently touched files) and
+ * `gpg.program` with `log.showSignature` (log). A repo copied from someone else could then run code just
+ * by being shown in the sidebar, so every call turns these off. No shell is involved (execFile), and
+ * callers also skip git entirely in untrusted VS Code windows.
  */
-const SAFE = ['-c', 'core.fsmonitor=false'];
+const SAFE = ['--no-pager', '--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false'];
 
-function run(cwd: string, args: string[]): Promise<string | undefined> {
+function exec(args: string[]): Promise<string | undefined> {
   return new Promise((resolve) =>
-    execFile(GIT, [...SAFE, '-C', cwd, ...args], { timeout: 3000, maxBuffer: 4 * 1024 * 1024 }, (err, out) =>
-      resolve(err ? undefined : out.toString()),
-    ),
+    execFile(GIT, args, { timeout: 3000, maxBuffer: 4 * 1024 * 1024 }, (err, out) => resolve(err ? undefined : out.toString())),
   );
+}
+
+/**
+ * `-c` overrides that disable every filter driver this repo's config defines (reading config runs
+ * nothing). Undefined when a driver name can't be overridden safely: then don't run git at all.
+ */
+export async function filterOverrides(cwd: string): Promise<string[] | undefined> {
+  const out = (await exec(['-C', cwd, 'config', '--null', '--get-regexp', '^filter\\.'])) ?? '';
+  const names = new Set<string>();
+  for (const entry of out.split('\0')) {
+    const key = entry.split('\n')[0];
+    const m = /^filter\.(.+)\.[^.]+$/.exec(key);
+    if (m) names.add(m[1]);
+  }
+  const args: string[] = [];
+  for (const name of names) {
+    if (/[=\s]/.test(name)) return undefined;
+    for (const v of ['clean=', 'smudge=', 'process=', 'required=false']) args.push('-c', `filter.${name}.${v}`);
+  }
+  return args;
+}
+
+async function run(cwd: string, args: string[]): Promise<string | undefined> {
+  const filters = await filterOverrides(cwd);
+  if (!filters) return undefined;
+  return exec([...SAFE, ...filters, '-C', cwd, ...args]);
 }
 
 const UNMERGED = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
@@ -80,7 +106,8 @@ export function parseStatus(out: string): GitInfo {
 
 async function load(cwd: string): Promise<GitInfo | undefined> {
   const [status, log] = await Promise.all([
-    run(cwd, ['status', '--porcelain=v1', '--branch', '--untracked-files=normal']),
+    // Submodules carry their own config (and filters); the sidebar doesn't need them.
+    run(cwd, ['status', '--porcelain=v1', '--branch', '--untracked-files=normal', '--ignore-submodules=all']),
     run(cwd, ['log', '-1', '--format=%ct%x09%s']),
   ]);
   if (status === undefined) return undefined;

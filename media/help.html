@@ -1,23 +1,38 @@
-<!-- Body of the "Herdr: How to Read the Sidebar" page (src/help.ts wraps it).
+<!-- Body of the "Herdr Hub: How to Read the Sidebar" page (src/help.ts wraps it).
      Examples use the sidebar's own classes from panel.css, so they look exactly like the real thing.
      [data-logo] avatars are filled in by help.js; the SETTINGS marker below becomes the live settings table. -->
 <header class="doc-head">
-  <div class="doc-title"><span class="codicon codicon-question"></span> How to read the Herdr sidebar</div>
+  <div class="doc-title"><span class="codicon codicon-question"></span> How to read the Herdr Hub sidebar</div>
   <p class="lede">
     The sidebar is a live view of your Herdr server: every space, the agents and shells in it, and what each one is
     doing. Nothing runs inside VS Code. Agents and shells keep running in Herdr, and the terminal tabs VS Code opens are
     just windows onto them.
   </p>
   <nav class="toc">
-    <a href="#top-bar">Top bar</a><a href="#usage">Usage</a><a href="#needs-you">Needs you</a><a href="#spaces">Spaces</a><a href="#git">Git line</a>
+    <a href="#top-bar">Header</a><a href="#usage">Usage</a><a href="#needs-you">Needs you</a><a href="#spaces">Spaces</a><a href="#git">Git line</a>
     <a href="#create">Create, rename, close</a><a href="#agents">Agents &amp; colors</a><a href="#shells">Shells</a><a href="#terminals">Terminal tabs</a>
     <a href="#actions">Actions</a><a href="#elsewhere">Status bar &amp; alerts</a><a href="#follow">Follow mode</a>
-    <a href="#keys">Keyboard</a><a href="#settings">Settings</a><a href="#trouble">Troubleshooting</a>
+    <a href="#keys">Keyboard</a><a href="#settings">Settings</a><a href="#privacy">Privacy &amp; safety</a><a href="#trouble">Troubleshooting</a>
   </nav>
 </header>
 
 <section id="top-bar">
-  <h2>Top bar</h2>
+  <h2>Header</h2>
+  <p>The top of the view has two rows: VS Code's title bar for the view, then the sidebar's own toolbar.</p>
+  <div class="demo titlebar">
+    <span class="tb-title">HERDR HUB</span>
+    <span class="tb-icons"><span class="icon-btn"><span class="codicon codicon-question"></span></span><span class="icon-btn"><span class="codicon codicon-ellipsis"></span></span></span>
+  </div>
+  <table>
+    <tr><th>Title bar</th><th>What it does</th></tr>
+    <tr><td><span class="codicon codicon-question"></span> Help</td><td>Opens this page.</td></tr>
+    <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Follow Herdr Focus</b></td><td>On/off (checked when on). When you switch spaces in Herdr itself, this window switches too. See <a href="#follow">Follow mode</a>.</td></tr>
+    <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Open Herdr TUI</b></td><td>Opens Herdr's own full-screen interface in an editor tab (also starts the Herdr server if it isn't running).</td></tr>
+    <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Set Up Hub Window</b></td><td>Opens a dedicated VS Code window for Herdr. See <a href="#follow">the hub window</a>.</td></tr>
+    <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Refresh</b></td><td>Re-reads everything from Herdr now. Rarely needed: the view updates by itself.</td></tr>
+    <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Settings</b></td><td>Opens this extension's settings (listed <a href="#settings">below</a>).</td></tr>
+    <tr><td><span class="codicon codicon-ellipsis"></span> → <b>Show Raw Session Snapshot</b></td><td>Everything Herdr reports, as JSON. For troubleshooting.</td></tr>
+  </table>
   <div class="demo top">
     <div class="stats">
       <span class="stat st-blocked"><span class="codicon codicon-warning"></span><span class="n">1</span> blocked</span>
@@ -29,22 +44,23 @@
       <span class="icon-btn" aria-pressed="true"><span class="codicon codicon-terminal"></span></span>
     </div>
   </div>
-  <ul>
-    <li><b>Counters</b> total your agents by status across all spaces. Click <b>blocked</b> or <b>done</b> to jump straight
-      to the agent that needs you (blocked first).</li>
-    <li><span class="codicon codicon-terminal"></span> <b>Shells</b> shows or hides plain shell panes. Highlighted means shown.</li>
-    <li>The <b>Herdr Hub</b> title bar has <span class="codicon codicon-question"></span> (this page) and
-      <span class="codicon codicon-ellipsis"></span>, a menu with <b>Follow Herdr Focus</b> (checked when on), <b>Open Herdr TUI</b>,
-      <b>Set Up Hub Window</b>, <b>Refresh</b>, <b>Settings</b> and <b>Show Raw Session Snapshot</b>.</li>
-    <li>New spaces: the <span class="codicon codicon-add"></span> next to <b>Spaces</b>.</li>
-  </ul>
+  <table>
+    <tr><th>Toolbar</th><th>What it does</th></tr>
+    <tr><td>Counters</td><td>Your agents by status across all spaces. Click <b>blocked</b> or <b>done</b> to jump straight to the agent that
+      needs you (blocked first). With no agents running it reads "<i>N</i> spaces · <i>N</i> agents".</td></tr>
+    <tr><td><span class="codicon codicon-terminal"></span> Shells</td><td>Shows or hides plain shell panes in every space (highlighted = shown).</td></tr>
+  </table>
+  <p>Further down, <b>Usage</b> and <b>Spaces</b> are section headings: click <b>Usage</b> to fold it, and use the
+    <span class="codicon codicon-add"></span> next to <b>Spaces</b> to create a space. Every action is also in the Command
+    Palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>) under <b>Herdr Hub:</b>, for example <b>Herdr Hub: New Space…</b></p>
 </section>
 
 <section id="usage">
   <h2>Usage</h2>
   <p>How much of each agent's plan you've used, for the agents <b>running in Herdr right now</b>: close every Codex pane
     and Codex disappears from here (and isn't checked). Refreshed once a minute while the sidebar is visible. Click
-    <b>Usage</b> to fold it into a one-line summary (each agent's 5-hour window, or Kiro's month).</p>
+    <b>Usage</b> to fold it into a one-line summary (each agent's 5-hour window, or Kiro's month). With none of these agents
+    running, the section is hidden.</p>
   <div class="demo">
     <div class="usage">
       <div class="usage-row"><div class="avatar logo small" data-logo="claude"></div><div class="main">
@@ -84,7 +100,8 @@
     <dt>Kiro</dt>
     <dd>Credits used today and this month, from Kiro's session files (Kiro CLI on this machine). Kiro doesn't share your plan's
       allowance with other tools, so click <b>Set monthly credits…</b> once and enter the number from Kiro's <code>/usage</code>
-      (setting <code>herdr.kiroMonthlyCredits</code>); the <b>mo</b> bar then shows how much of it you've used, renewing on the 1st.</dd>
+      (setting <code>herdr.kiroMonthlyCredits</code>); the <b>mo</b> bar then shows how much of it you've used, renewing on the 1st.
+      "Used" counts Kiro CLI on this machine only (not the Kiro IDE or other computers), and the calendar month stands in for your billing cycle.</dd>
   </dl>
 </section>
 
@@ -137,6 +154,10 @@
     <dd>The most urgent agent in the space: orange blocked, green done, blue working. No bar when everything is idle.</dd>
     <dt>Blue outline</dt>
     <dd>The space that is currently focused in Herdr (for example in your terminal).</dd>
+    <dt>Hover the name</dt>
+    <dd>Shows the space's folder.</dd>
+    <dt><span class="codicon codicon-add"></span> New tab</dt>
+    <dd>The dashed row at the bottom of an open card. See <a href="#create">Create, rename and close</a>.</dd>
   </dl>
 </section>
 
@@ -215,6 +236,8 @@
     <dt>Second line</dt><dd>The task title the agent set; without one, the gist of its latest reply (such as Claude's "recap").</dd>
     <dt><span class="codicon codicon-chevron-down"></span> Details</dt><dd>Shows the rest: the full summary of the latest reply (or, for a blocked or done agent, the end of its screen), chips for the Herdr tab, model and other metadata, and the working folder. Click again (or press <kbd>←</kbd>) to hide. Each row remembers its choice.</dd>
     <dt>Small blue dot after the name</dt><dd>The pane that is focused in Herdr.</dd>
+    <dt>Click the row</dt><dd>Opens the agent in a terminal tab (or brings its tab forward).</dd>
+    <dt><span class="codicon codicon-diff"></span> on hover</dt><dd><b>Review changes</b>: the changed files in the agent's folder, with diffs.</dd>
   </dl>
   <table>
     <tr><th>Status</th><th>Meaning</th><th>Alerts you</th></tr>
@@ -229,8 +252,9 @@
 
 <section id="shells">
   <h2>Shells</h2>
-  <p>Plain terminals in the space, grouped under <b>Shells</b> with a summary such as "1 running · 1 error". For each
-    one the sidebar asks Herdr which program is in the foreground and reads its last lines of output.</p>
+  <p>Plain terminals in the space, grouped under <b>Shells · <i>N</i></b> with a summary such as "1 running · 1 error". Click
+    the group heading to fold it (it starts folded when a space has more than 3 shells). For each shell the sidebar asks
+    Herdr which program is in the foreground and reads its last lines of output. Click a shell to open it in a terminal tab.</p>
   <div class="demo">
     <div class="row shell sh-prompt"><div class="avatar"><span class="codicon codicon-terminal"></span></div><div class="main"><div class="line1"><span class="name">DB tunnel</span><span class="state">at prompt</span></div><div class="cmd"><span class="sigil">$</span><span class="text">autossh -M 0 -f -N -L 5433:db:5432 jumphost</span></div></div><div class="side"><span class="icon-btn expander"><span class="codicon codicon-chevron-down"></span></span></div></div>
     <div class="row shell sh-live"><div class="avatar"><span class="codicon codicon-terminal"></span></div><div class="main"><div class="line1"><span class="name">Tab 3</span><span class="state">live output <span class="t">2s</span></span></div><div class="cmd"><span class="sigil">▶</span><span class="text">python app.py</span></div></div><div class="side"><span class="icon-btn expander"><span class="codicon codicon-chevron-down"></span></span></div></div>
@@ -261,6 +285,7 @@
     <li>Agents open with <b>takeover</b>: your keystrokes go to the agent from this tab.</li>
     <li><b>Closing a tab only detaches.</b> The agent or shell keeps running in Herdr. Inside the tab, <kbd>ctrl</kbd>+<kbd>b</kbd> then <kbd>q</kbd> also detaches.</li>
     <li>In the hub window, tabs show only their name. Elsewhere VS Code adds the folder name after it; to hide that in every window, set <code>terminal.integrated.tabs.description</code> to <code>${task}</code> in your user settings.</li>
+    <li>Clicking a space opens all its panes as tabs, in order: agents (most urgent first), then shells.</li>
     <li>Switching spaces closes the previous space's tabs (setting <code>herdr.closeTerminalsOnSwitch</code>). Tabs open in the editor area or the bottom panel (<code>herdr.terminalLocation</code>).</li>
   </ul>
 </section>
@@ -289,7 +314,8 @@
   <h2>Follow mode and the hub window</h2>
   <p><b>Follow mode</b> (<span class="codicon codicon-ellipsis"></span> menu → <b>Follow Herdr Focus</b>): when you switch spaces in Herdr itself, this window switches too.
     To avoid hijacking unrelated windows it only acts in the hub window, or in a window where you've already switched a space from the sidebar.</p>
-  <p>The <b>hub window</b> (<span class="codicon codicon-ellipsis"></span> menu → <b>Set Up Hub Window</b>) is a dedicated VS Code window for Herdr. Its first folder never changes, so switching spaces never restarts your extensions.</p>
+  <p>The <b>hub window</b> (<span class="codicon codicon-ellipsis"></span> menu → <b>Set Up Hub Window</b>) is a dedicated VS Code window for Herdr. Its first folder never changes, so switching spaces never restarts your extensions. In the hub window, terminal tabs show
+    just their name, and VS Code's terminal <b>+</b> creates Herdr tabs (see <a href="#create">Create</a>).</p>
   <p><button class="btn secondary" data-cmd="setupHub">Set up hub window</button></p>
 </section>
 
@@ -298,7 +324,7 @@
   <table>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Move between spaces, agents and shells</td></tr>
     <tr><td><kbd>Enter</kbd> / <kbd>Space</kbd></td><td>Same as clicking (switch space, open terminal, toggle group)</td></tr>
-    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>On a space: collapse / expand</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>On a space: collapse / expand. On an agent or shell: hide / show its details.</td></tr>
   </table>
 </section>
 
@@ -308,12 +334,29 @@
   <!--SETTINGS-->
 </section>
 
+<section id="privacy">
+  <h2>Privacy and safety</h2>
+  <ul>
+    <li>Everything shown comes from your Herdr server and from files on this machine. Shell output, agent screens and usage
+      numbers never leave your computer. The only network request is Codex's own usage check, which Codex makes with its own login.</li>
+    <li>Herdr Hub never reads the agents' logins or tokens. Claude's plan limits come only from the status line you opt into.</li>
+    <li>The git line runs only in trusted VS Code windows, and with commands a repository could define for itself
+      (fsmonitor, filters, signature checks) switched off, so a copied repository can't run code by being shown here.</li>
+    <li><code>herdr.binaryPath</code> and <code>herdr.socketPath</code> count only in your user settings: a repository's own settings
+      can't choose the program Herdr Hub runs.</li>
+  </ul>
+</section>
+
 <section id="trouble">
   <h2>Troubleshooting</h2>
   <dl>
     <dt>"Herdr isn't reachable"</dt><dd>Start the server by running <code>herdr</code> in any terminal, or use <b>Open Herdr TUI</b>. If you use a named session or a custom socket, set <code>herdr.socketPath</code>.</dd>
     <dt>Clicking a space says "open a folder first"</dt><dd>Spaces are mounted next to the folder the window already has. Open any folder, or set up the hub window.</dd>
-    <dt>A terminal tab won't open</dt><dd>VS Code may not find the <code>herdr</code> binary when launched from the Dock. Set <code>herdr.binaryPath</code>.</dd>
+    <dt>A terminal tab won't open</dt><dd>VS Code may not find the <code>herdr</code> binary when launched from the Dock. Set <code>herdr.binaryPath</code> in your <b>user</b> settings (workspace values are ignored).</dd>
+    <dt>No git line under a space</dt><dd>The folder isn't a git repository, or the window isn't trusted (<b>Manage Workspace Trust</b> in the Command Palette).</dd>
+    <dt>An agent is missing from Usage</dt><dd>Usage lists only Claude Code, Codex and Kiro, and only while one of their panes is open in Herdr.</dd>
+    <dt>Claude Code shows no bars</dt><dd>Click <b>Show plan limits…</b>. Bars need a claude.ai Pro or Max plan and appear after Claude's next reply.</dd>
+    <dt>Codex shows "as of …" instead of "live"</dt><dd>The live check couldn't reach Codex (not installed where VS Code looks, or logged out); the numbers come from its logs instead.</dd>
     <dt>Something looks wrong</dt><dd>Right-click it → <b>Show Raw Herdr Record</b>, or <span class="codicon codicon-ellipsis"></span> → <b>Show Raw Session Snapshot</b>. The <b>Herdr Hub</b> output panel logs connections and follow-mode switches.</dd>
   </dl>
   <p><button class="btn secondary" data-cmd="refresh"><span class="codicon codicon-refresh"></span> Refresh now</button></p>

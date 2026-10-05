@@ -2,7 +2,7 @@
   "name": "herdr-hub",
   "displayName": "Herdr Hub",
   "description": "Herdr spaces and agents inside one VS Code window: switch spaces, attach agents as editor tabs, review agent changes.",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "publisher": "srihari-local",
   "license": "MIT",
   "repository": {

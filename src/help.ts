@@ -1,4 +1,4 @@
-// "Herdr: How to Read the Sidebar": a user-facing guide in an editor tab (media/help.html).
+// "Herdr Hub: How to Read the Sidebar": a user-facing guide in an editor tab (media/help.html).
 // Reuses the sidebar's stylesheet so its examples look exactly like the real sidebar,
 // and lists the extension's settings straight from package.json so they never drift.
 import * as vscode from 'vscode';
@@ -27,7 +27,7 @@ function settingsTable(ext: vscode.Extension<unknown>): string {
 export function showHelp(ctx: vscode.ExtensionContext) {
   if (current) return current.reveal();
   const media = vscode.Uri.joinPath(ctx.extensionUri, 'media');
-  const panel = vscode.window.createWebviewPanel('herdr.help', 'Herdr: Sidebar Guide', vscode.ViewColumn.Active, {
+  const panel = vscode.window.createWebviewPanel('herdr.help', 'Herdr Hub: Sidebar Guide', vscode.ViewColumn.Active, {
     enableScripts: true,
     localResourceRoots: [media],
   });
@@ -46,7 +46,7 @@ export function showHelp(ctx: vscode.ExtensionContext) {
 <link href="${uri('codicons', 'codicon.css')}" rel="stylesheet">
 <link href="${uri('panel.css')}" rel="stylesheet">
 <link href="${uri('help.css')}" rel="stylesheet">
-<title>Herdr sidebar guide</title>
+<title>Herdr Hub sidebar guide</title>
 </head>
 <body><main class="doc">${body}</main>
 <script nonce="${nonce}" src="${uri('agent-icons.js')}"></script>
