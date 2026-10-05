@@ -51,7 +51,7 @@ const PANEL_COMMANDS: Record<string, string> = {
 
 export function activate(ctx: vscode.ExtensionContext) {
   const cfg = () => vscode.workspace.getConfiguration('herdr');
-  const log = vscode.window.createOutputChannel('Herdr Bridge');
+  const log = vscode.window.createOutputChannel('Herdr Hub');
   const client = new HerdrClient(() => resolveSocketPath(cfg().get<string>('socketPath')));
   // When did each agent enter its current state? (observed locally; Herdr exposes only a sequence number)
   const stateSince = new Map<string, { status?: AgentStatus; at: number }>();
@@ -93,7 +93,13 @@ export function activate(ctx: vscode.ExtensionContext) {
   let firstLoad = true;
   let switching = false;
 
-  const isManagedWindow = () => cfg().get<boolean>('hubWindow') || ctx.workspaceState.get<boolean>(MANAGED_KEY, false);
+  // The hub is our own ~/.herdr-hub workspace; a repo's settings claiming `herdr.hubWindow` don't make it one
+  // (the hub writes terminal settings into its workspace file).
+  const hubFile = path.join(os.homedir(), '.herdr-hub', 'herdr-hub.code-workspace');
+  const isHubWindow = () => !!cfg().get<boolean>('hubWindow') && vscode.workspace.workspaceFile?.fsPath === hubFile;
+  const isManagedWindow = () => isHubWindow() || ctx.workspaceState.get<boolean>(MANAGED_KEY, false);
+  // git reads each repo's own config; only run it once the window is trusted (see gitInfo.ts).
+  const git = (cwd?: string) => (vscode.workspace.isTrusted ? gitInfo(cwd, scheduleRender) : undefined);
 
   // ---------- sync loop ----------
   let inFlight = false;
@@ -157,7 +163,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         model,
         showShells: showShells(),
         since: (id) => stateSince.get(id)?.at,
-        git: (cwd) => gitInfo(cwd, scheduleRender),
+        git,
         mounted: isMounted,
         attached: (id) => terms.has(id),
         activity: (id) => activity.get(id),
@@ -390,7 +396,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     agentIcon,
     spaces: () => model?.spaces ?? [],
     branchOf: (cwd) => {
-      const g = gitInfo(cwd, scheduleRender);
+      const g = git(cwd);
       return g && !g.detached ? g.branch : undefined;
     },
     agentNames: () => model?.spaces.flatMap((s) => s.agents.map((a) => a.raw.agent?.name).filter((n): n is string => !!n)) ?? [],
@@ -433,6 +439,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (e.affectsConfiguration('herdr.showShellPanes')) pollActivity();
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => render()),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => render()),
 
     vscode.commands.registerCommand('herdr.refresh', () => refresh().then(startEvents)),
 
@@ -578,7 +585,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   // workspace only. Set once; a value you choose later is left alone.
   // Also make "+" create Herdr tabs here: "Herdr Shell" becomes this workspace's default profile.
   // VS Code only applies a workspace default profile in a trusted workspace.
-  if (cfg().get<boolean>('hubWindow')) {
+  if (isHubWindow()) {
     const term = vscode.workspace.getConfiguration('terminal.integrated');
     const once = (key: string, value: string) => {
       if (term.inspect(key)?.workspaceValue !== undefined) return;

@@ -1,4 +1,4 @@
-# Herdr Bridge — VS Code extension
+# Herdr Hub — VS Code extension
 
 ## What this is
 A VS Code extension that brings [Herdr](https://herdr.dev) (a terminal-native multiplexer for AI coding agents)
@@ -8,7 +8,7 @@ into **one** VS Code window. Goal: keep Herdr's spaces/agents workflow but get t
 The user runs Herdr in the macOS terminal. Their agents include Claude Code, Codex and Kiro. The extension is a **client of the
 Herdr server**. It never owns agent processes; Herdr does.
 
-Status: working prototype (v0.0.16), installed and tried by the user on macOS against a real Herdr
+Status: working prototype (v0.0.18), installed and tried by the user on macOS against a real Herdr
 server (installed binary: herdr 0.9.1, socket protocol 22; the online docs were at 0.9.3). Confirmed working in real use: sidebar lists real
 spaces/agents, space switching, attach terminals.
 
@@ -17,7 +17,7 @@ spaces/agents, space switching, attach terminals.
 npm install
 npm run compile        # tsc -> out/
 npm test               # mock Herdr socket server tests + git info test (no VS Code needed)
-npm run package        # -> herdr-bridge-<version>.vsix
+npm run package        # -> herdr-hub-<version>.vsix
 npm run install-local  # package + code --install-extension --force
 ```
 Debug: open this folder in VS Code, press F5 (`.vscode/launch.json`) to get an Extension Development Host.
@@ -57,7 +57,7 @@ Bump `version` in package.json for each vsix you hand to the user.
 - **Switching a space:** mount its folder, reveal it in Explorer, call `workspace.focus` in Herdr, and close the attach terminals of other spaces (`closeTerminalsOnSwitch`). Then attach every pane as its own tab: agents most urgent first (blocked > done > working > idle), then shells in tab order (`autoAttachShells`). VS Code places each new terminal tab after the previous one (editor area and panel alike), so they're opened in that order, then the first is focused.
 - **Events are invalidation signals.** Always re-read with `session.snapshot`; never apply event payloads incrementally. This is what Herdr's docs recommend: on `events_lost`, resubscribe and re-snapshot.
 - **UI layout:** the user moved the Herdr view to the **secondary (right) sidebar** by hand and keeps Explorer on the left. Extensions can't target the secondary sidebar without the proposed API `contribSecondarySidebar` (`viewsContainers.secondarySidebar`), so the container stays in the activity bar.
-- **Sidebar design (v0.0.4):** space cards (collapsible, status accent bar, branch/changes line), agents and shells as compact two-line rows (name + status pill, then one line: task/summary or `$ command`) with a chevron that reveals details (summary or screen, output box, chips, folder; persisted per pane in webview state); no "attached" chips, a "Needs you" section for blocked/done agents with a screen preview, and a collapsible "Shells" group per space. Pane names come from `paneName()` (viewState.ts) and are used for both the sidebar row and the VS Code terminal tab (VS Code can't rename a tab later, so names use only snapshot fields): agents = display name or kind ("Claude"); shells = pane label → tab label → `Tab N`. Agent terminal tabs use the logo from `media/agent-logos` as their icon. Space header = chevron + name only (no tags or hover buttons); the git line shows branch · last-commit age · ↑↓/synced/no upstream · conflicts/staged/modified/new or clean · Review. Toggle shells and open settings from the view header or the `…` menu.
+- **Sidebar design (v0.0.4):** space cards (collapsible, status accent bar, branch/changes line), agents and shells as compact two-line rows (name + status pill, then one line: task/summary or `$ command`) with a chevron that reveals details (summary or screen, output box, chips, folder; persisted per pane in webview state); no "attached" chips, a "Needs you" section for blocked/done agents with a screen preview, and a collapsible "Shells" group per space. Pane names come from `paneName()` (viewState.ts) and are used for both the sidebar row and the VS Code terminal tab (VS Code can't rename a tab later, so names use only snapshot fields): agents = display name or kind ("Claude"); shells = pane label → tab label → `Tab N`. Agent terminal tabs use the logo from `media/agent-logos` as their icon. Space header = chevron + name only (no tags or hover buttons); the git line shows branch · last-commit age · ↑↓/synced/no upstream · conflicts/staged/modified/new or clean · Review. Header: title bar = "Herdr Hub" + `?` (help) + `⋯` (Follow Herdr Focus ✓, Open Herdr TUI, Set Up Hub Window, Refresh, Settings, Raw Snapshot); webview top = status counters + shells toggle; New space only via the `+` beside "Spaces". Each control lives in exactly one place.
 - **Out of scope:** the user doesn't want AI chat (Copilot, Claude Code or Codex panels) in the hub window. Their agents run in Herdr.
 
 ## Herdr API facts used (from herdr.dev/docs/socket-api)
@@ -98,13 +98,14 @@ After upgrading Herdr: `npm run gen:types`, fix compile errors, and save a new `
 2. Use targeted event payloads, such as `pane.agent_status_changed`, for instant status updates instead of a full re-snapshot. Keep the snapshot fallback.
 3. **Prompt agent from VS Code**: on an agent row, open an input box and call `agent.prompt`. Optionally send the current selection or file path as context.
 4. ~~New agent / new worktree space~~ (done: New tab / New space / + button).
-5. A **reverse jump** Herdr plugin (`herdr-plugin.toml`) with an action that opens `vscode://srihari-local.herdr-bridge/focus?workspace=<id>`. The extension would need `registerUriHandler`.
+5. A **reverse jump** Herdr plugin (`herdr-plugin.toml`) with an action that opens `vscode://srihari-local.herdr-hub/focus?workspace=<id>`. The extension would need `registerUriHandler`.
 6. On done: auto-open review, and diff against the merge-base instead of HEAD when on a worktree branch.
 7. ~~`pane.read` preview for blocked agents~~ (done in the sidebar).
 8. Support named sessions and remote machines (`herdr --remote`) via the `herdr.socketPath` setting or a session picker.
 9. Bundle with esbuild. Add an ESLint config and CI. Swap the placeholder `repository` URL in package.json for the real one.
 
 ## Conventions
+- **Security (from a commit review):** git runs with `-c core.fsmonitor=false` and only in trusted windows (a repo's own `.git/config` can name a command `git status` runs). `herdr.binaryPath`/`socketPath` are `machine`-scoped so a repository's `.vscode/settings.json` can't pick the program we launch. The hub is recognised only by its workspace file (`~/.herdr-hub/herdr-hub.code-workspace`), not by a `herdr.hubWindow` workspace setting alone. Keep these when touching git, settings or process launches; never put real paths, hosts, names or ids in tests/fixtures/docs (the repo was scrubbed once).
 - TypeScript strict. Keep `herdrClient.ts` and `model.ts` free of `vscode` imports so `npm test` runs without VS Code.
 - Add a mock-server test for any new socket method.
 - Never write workspace folder index 0.

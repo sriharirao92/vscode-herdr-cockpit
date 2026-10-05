@@ -22,11 +22,16 @@ console.log('✓ git status parsing');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-git-'));
 execSync('git init -q -b main && git -c user.email=a@b -c user.name=t commit -q --allow-empty -m init', { cwd: dir });
 fs.writeFileSync(path.join(dir, 'a.txt'), 'x'); fs.writeFileSync(path.join(dir, 'b.txt'), 'y');
+// A repository's core.fsmonitor command must never run (it would execute on every refresh).
+const marker = path.join(dir, '..', `fsmonitor-ran-${process.pid}`);
+fs.writeFileSync(path.join(dir, 'hook.sh'), `#!/bin/sh\ntouch "${marker}"\n`, { mode: 0o755 });
+execSync(`git config core.fsmonitor "${path.join(dir, 'hook.sh')}"`, { cwd: dir });
 gitInfo(dir, () => {
+  assert.ok(!fs.existsSync(marker), 'core.fsmonitor from the repo config was executed');
   const info = gitInfo(dir, () => {})!;
-  assert.strictEqual(info.branch, 'main'); assert.strictEqual(info.changes, 2); assert.strictEqual(info.untracked, 2);
+  assert.strictEqual(info.branch, 'main'); assert.strictEqual(info.changes, 3); assert.strictEqual(info.untracked, 3);
   assert.strictEqual(info.lastCommit?.subject, 'init');
   assert.strictEqual(gitInfo('/definitely/not/here', () => {}), undefined);
-  console.log('✓ git branch + change count'); process.exit(0);
+  console.log('✓ git branch + change count; repo core.fsmonitor not executed'); process.exit(0);
 });
 setTimeout(() => { console.error('git test timed out'); process.exit(1); }, 4000);

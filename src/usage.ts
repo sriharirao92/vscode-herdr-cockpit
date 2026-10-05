@@ -164,7 +164,7 @@ export function codexLiveUsage(bin: string, timeoutMs = 10_000): Promise<Provide
         }
       }
     });
-    send({ id: 1, method: 'initialize', params: { clientInfo: { name: 'herdr-bridge', title: 'Herdr Bridge', version: '1' } } });
+    send({ id: 1, method: 'initialize', params: { clientInfo: { name: 'herdr-hub', title: 'Herdr Hub', version: '1' } } });
   });
 }
 
@@ -336,7 +336,7 @@ export async function readUsage(home: string, now = Date.now(), opts: UsageOptio
  */
 export function claudeStatusLineScript(captureFile: string): string {
   return `#!/bin/sh
-# Installed by Herdr Bridge (VS Code). Claude Code shares plan usage (rate_limits) only with a status
+# Installed by Herdr Hub (VS Code). Claude Code shares plan usage (rate_limits) only with a status
 # line command: this saves it for the Herdr sidebar and prints it. Remove "statusLine" from
 # ~/.claude/settings.json to turn it off.
 f="${captureFile}"

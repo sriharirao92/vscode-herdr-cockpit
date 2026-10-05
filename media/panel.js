@@ -76,8 +76,6 @@
       <div class="stats">${stats || quiet}</div>
       <div class="tools">
         ${btn('toggleShellPanes', 'terminal', state.showShells ? 'Hide shell panes' : 'Show shell panes', `aria-pressed="${state.showShells}"`)}
-        ${btn('openHelp', 'question', 'How to read this view')}
-        ${btn('openSettings', 'settings-gear', 'Herdr Bridge settings')}
       </div>
     </div>`;
   }

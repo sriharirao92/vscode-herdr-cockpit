@@ -28,9 +28,16 @@ const GIT = ['/usr/bin/git', '/opt/homebrew/bin/git', '/usr/local/bin/git'].find
 const TTL_MS = 8000;
 const cache = new Map<string, { at: number; info?: GitInfo; pending?: Promise<GitInfo | undefined> }>();
 
+/**
+ * `git status` runs the command a repository names in `core.fsmonitor` (from its own .git/config), so a
+ * repo copied from someone else could run code just by being shown in the sidebar. Always turn it off.
+ * (Callers also skip git entirely in untrusted VS Code windows.)
+ */
+const SAFE = ['-c', 'core.fsmonitor=false'];
+
 function run(cwd: string, args: string[]): Promise<string | undefined> {
   return new Promise((resolve) =>
-    execFile(GIT, ['-C', cwd, ...args], { timeout: 3000, maxBuffer: 4 * 1024 * 1024 }, (err, out) =>
+    execFile(GIT, [...SAFE, '-C', cwd, ...args], { timeout: 3000, maxBuffer: 4 * 1024 * 1024 }, (err, out) =>
       resolve(err ? undefined : out.toString()),
     ),
   );

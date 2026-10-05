@@ -27,18 +27,16 @@
     </div>
     <div class="tools">
       <span class="icon-btn" aria-pressed="true"><span class="codicon codicon-terminal"></span></span>
-      <span class="icon-btn"><span class="codicon codicon-question"></span></span>
-      <span class="icon-btn"><span class="codicon codicon-settings-gear"></span></span>
     </div>
   </div>
   <ul>
     <li><b>Counters</b> total your agents by status across all spaces. Click <b>blocked</b> or <b>done</b> to jump straight
       to the agent that needs you (blocked first).</li>
     <li><span class="codicon codicon-terminal"></span> <b>Shells</b> shows or hides plain shell panes. Highlighted means shown.</li>
-    <li><span class="codicon codicon-question"></span> opens this page. <span class="codicon codicon-settings-gear"></span> opens the settings.</li>
-    <li>The view's own title bar has <span class="codicon codicon-add"></span> new space, <span class="codicon codicon-refresh"></span> refresh,
-      <span class="codicon codicon-eye"></span> follow mode on/off and <span class="codicon codicon-window"></span> open the full
-      Herdr TUI in an editor tab. Its <span class="codicon codicon-ellipsis"></span> menu has the rest.</li>
+    <li>The <b>Herdr Hub</b> title bar has <span class="codicon codicon-question"></span> (this page) and
+      <span class="codicon codicon-ellipsis"></span>, a menu with <b>Follow Herdr Focus</b> (checked when on), <b>Open Herdr TUI</b>,
+      <b>Set Up Hub Window</b>, <b>Refresh</b>, <b>Settings</b> and <b>Show Raw Session Snapshot</b>.</li>
+    <li>New spaces: the <span class="codicon codicon-add"></span> next to <b>Spaces</b>.</li>
   </ul>
 </section>
 
@@ -163,7 +161,7 @@
 <section id="create">
   <h2>Create, rename and close</h2>
   <dl>
-    <dt><span class="codicon codicon-add"></span> New space (next to "Spaces", or in the view's title bar)</dt>
+    <dt><span class="codicon codicon-add"></span> New space (next to "Spaces")</dt>
     <dd>Pick <b>Choose a folder…</b>, or <b>New git worktree of</b> an existing space: a separate checkout on a new branch, so
       an agent can work without touching your current branch (Herdr puts it in <code>~/.herdr/worktrees/&lt;repo&gt;/&lt;branch&gt;</code>).
       Then name it and choose what to start. The window switches to the new space.</dd>
@@ -289,9 +287,9 @@
 
 <section id="follow">
   <h2>Follow mode and the hub window</h2>
-  <p><b>Follow mode</b> (<span class="codicon codicon-eye"></span> in the title bar): when you switch spaces in Herdr itself, this window switches too.
+  <p><b>Follow mode</b> (<span class="codicon codicon-ellipsis"></span> menu → <b>Follow Herdr Focus</b>): when you switch spaces in Herdr itself, this window switches too.
     To avoid hijacking unrelated windows it only acts in the hub window, or in a window where you've already switched a space from the sidebar.</p>
-  <p>The <b>hub window</b> (<span class="codicon codicon-ellipsis"></span> menu → <b>Set up Herdr Hub Window</b>) is a dedicated VS Code window for Herdr. Its first folder never changes, so switching spaces never restarts your extensions.</p>
+  <p>The <b>hub window</b> (<span class="codicon codicon-ellipsis"></span> menu → <b>Set Up Hub Window</b>) is a dedicated VS Code window for Herdr. Its first folder never changes, so switching spaces never restarts your extensions.</p>
   <p><button class="btn secondary" data-cmd="setupHub">Set up hub window</button></p>
 </section>
 
@@ -316,7 +314,7 @@
     <dt>"Herdr isn't reachable"</dt><dd>Start the server by running <code>herdr</code> in any terminal, or use <b>Open Herdr TUI</b>. If you use a named session or a custom socket, set <code>herdr.socketPath</code>.</dd>
     <dt>Clicking a space says "open a folder first"</dt><dd>Spaces are mounted next to the folder the window already has. Open any folder, or set up the hub window.</dd>
     <dt>A terminal tab won't open</dt><dd>VS Code may not find the <code>herdr</code> binary when launched from the Dock. Set <code>herdr.binaryPath</code>.</dd>
-    <dt>Something looks wrong</dt><dd>Right-click it → <b>Show Raw Herdr Record</b>, or <span class="codicon codicon-ellipsis"></span> → <b>Show Raw Session Snapshot</b>. The <b>Herdr Bridge</b> output panel logs connections and follow-mode switches.</dd>
+    <dt>Something looks wrong</dt><dd>Right-click it → <b>Show Raw Herdr Record</b>, or <span class="codicon codicon-ellipsis"></span> → <b>Show Raw Session Snapshot</b>. The <b>Herdr Hub</b> output panel logs connections and follow-mode switches.</dd>
   </dl>
   <p><button class="btn secondary" data-cmd="refresh"><span class="codicon codicon-refresh"></span> Refresh now</button></p>
 </section>

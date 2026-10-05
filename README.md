@@ -1,4 +1,4 @@
-# Herdr Bridge (prototype)
+# Herdr Hub (prototype)
 
 Herdr spaces and agents inside **one** VS Code window.
 
@@ -15,7 +15,7 @@ Herdr spaces and agents inside **one** VS Code window.
 - **Review changes**: HEAD ↔ working-tree diffs for the agent's repo; offered automatically when an agent goes `done`.
 
 ## Install
-    code --install-extension herdr-bridge-0.0.1.vsix
+    code --install-extension herdr-hub-<version>.vsix
 
 ## First run
 1. Make sure the Herdr server is running (`herdr` in any terminal, or "Herdr: Open Full Herdr TUI in Editor").
@@ -27,7 +27,7 @@ Herdr spaces and agents inside **one** VS Code window.
 ## Debugging
 - **Herdr: Show Raw Session Snapshot** shows exactly what Herdr returns. Snapshot types are generated
   from `herdr api schema --json` (`npm run gen:types`).
-- Output panel → "Herdr Bridge" logs connection and follow events.
+- Output panel → "Herdr Hub" logs connection and follow events.
 
 ## Develop
     npm install && npm run compile && npm test   # mock-server tests, no VS Code needed

@@ -1,8 +1,8 @@
 {
-  "name": "herdr-bridge",
-  "displayName": "Herdr Bridge",
+  "name": "herdr-hub",
+  "displayName": "Herdr Hub",
   "description": "Herdr spaces and agents inside one VS Code window: switch spaces, attach agents as editor tabs, review agent changes.",
-  "version": "0.0.16",
+  "version": "0.0.18",
   "publisher": "srihari-local",
   "license": "MIT",
   "repository": {
@@ -24,7 +24,7 @@
       "activitybar": [
         {
           "id": "herdr",
-          "title": "Herdr",
+          "title": "Herdr Hub",
           "icon": "media/herdr.svg"
         }
       ]
@@ -42,169 +42,159 @@
       {
         "command": "herdr.refresh",
         "title": "Refresh",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(refresh)"
       },
       {
         "command": "herdr.switchSpace",
         "title": "Switch to Space",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(arrow-right)"
       },
       {
         "command": "herdr.pinSpace",
         "title": "Mount Space Alongside (Pin)",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(pin)"
       },
       {
         "command": "herdr.unmountSpace",
         "title": "Unmount Space",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(close)"
       },
       {
         "command": "herdr.attach",
         "title": "Attach Terminal",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(terminal)"
       },
       {
         "command": "herdr.reviewChanges",
         "title": "Review Agent Changes",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(diff)"
       },
       {
         "command": "herdr.focusAttention",
         "title": "Jump to Agent Needing Attention",
-        "category": "Herdr"
+        "category": "Herdr Hub"
       },
       {
         "command": "herdr.openTui",
-        "title": "Open Full Herdr TUI in Editor",
-        "category": "Herdr",
+        "title": "Open Herdr TUI",
+        "category": "Herdr Hub",
         "icon": "$(window)"
       },
       {
         "command": "herdr.setupHub",
-        "title": "Set up Herdr Hub Window",
-        "category": "Herdr"
+        "title": "Set Up Hub Window",
+        "category": "Herdr Hub"
       },
       {
         "command": "herdr.toggleFollow",
-        "title": "Toggle Follow Herdr Focus",
-        "category": "Herdr",
-        "icon": "$(eye)"
+        "title": "Follow Herdr Focus",
+        "category": "Herdr Hub",
+        "toggled": "config.herdr.followMode"
       },
       {
         "command": "herdr.dumpSnapshot",
-        "title": "Show Raw Session Snapshot (debug)",
-        "category": "Herdr"
+        "title": "Show Raw Session Snapshot",
+        "category": "Herdr Hub"
       },
       {
         "command": "herdr.toggleShellPanes",
         "title": "Toggle Shell Panes",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(terminal)"
       },
       {
         "command": "herdr.openSettings",
-        "title": "Open Herdr Bridge Settings",
-        "category": "Herdr",
+        "title": "Settings",
+        "category": "Herdr Hub",
         "icon": "$(settings-gear)"
       },
       {
         "command": "herdr.showRaw",
         "title": "Show Raw Herdr Record",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(json)"
       },
       {
         "command": "herdr.openHelp",
         "title": "How to Read the Sidebar",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(question)"
       },
       {
         "command": "herdr.newTab",
         "title": "New Tab…",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(add)"
       },
       {
         "command": "herdr.rename",
         "title": "Rename…",
-        "category": "Herdr"
+        "category": "Herdr Hub"
       },
       {
         "command": "herdr.closeInHerdr",
         "title": "Close in Herdr…",
-        "category": "Herdr"
+        "category": "Herdr Hub"
       },
       {
         "command": "herdr.newSpace",
         "title": "New Space…",
-        "category": "Herdr",
+        "category": "Herdr Hub",
         "icon": "$(add)"
       },
       {
         "command": "herdr.setupClaudeUsage",
         "title": "Show Claude Plan Limits in the Sidebar…",
-        "category": "Herdr"
+        "category": "Herdr Hub"
       },
       {
         "command": "herdr.setKiroCredits",
         "title": "Set Kiro Monthly Credits…",
-        "category": "Herdr"
+        "category": "Herdr Hub"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "herdr.newSpace",
-          "when": "view == herdr.spaces",
-          "group": "navigation@0"
-        },
-        {
-          "command": "herdr.refresh",
+          "command": "herdr.openHelp",
           "when": "view == herdr.spaces",
           "group": "navigation@1"
         },
         {
           "command": "herdr.toggleFollow",
           "when": "view == herdr.spaces",
-          "group": "navigation@2"
+          "group": "1_follow@1"
         },
         {
           "command": "herdr.openTui",
           "when": "view == herdr.spaces",
-          "group": "navigation@3"
-        },
-        {
-          "command": "herdr.openHelp",
-          "when": "view == herdr.spaces",
-          "group": "navigation@4"
-        },
-        {
-          "command": "herdr.toggleShellPanes",
-          "when": "view == herdr.spaces",
-          "group": "more@1"
-        },
-        {
-          "command": "herdr.openSettings",
-          "when": "view == herdr.spaces",
-          "group": "more@2"
+          "group": "2_open@1"
         },
         {
           "command": "herdr.setupHub",
           "when": "view == herdr.spaces",
-          "group": "more@3"
+          "group": "2_open@2"
+        },
+        {
+          "command": "herdr.refresh",
+          "when": "view == herdr.spaces",
+          "group": "3_tools@1"
+        },
+        {
+          "command": "herdr.openSettings",
+          "when": "view == herdr.spaces",
+          "group": "3_tools@2"
         },
         {
           "command": "herdr.dumpSnapshot",
           "when": "view == herdr.spaces",
-          "group": "more@4"
+          "group": "3_tools@3"
         }
       ],
       "commandPalette": [
@@ -282,17 +272,19 @@
       ]
     },
     "configuration": {
-      "title": "Herdr Bridge",
+      "title": "Herdr Hub",
       "properties": {
         "herdr.binaryPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the herdr binary. Empty = auto-detect (Homebrew, ~/.local/bin, PATH)."
+          "description": "Path to the herdr binary. Empty = auto-detect (Homebrew, ~/.local/bin, PATH). Machine setting: ignored in workspace and folder settings, so a repository can't choose the program the extension runs.",
+          "scope": "machine"
         },
         "herdr.socketPath": {
           "type": "string",
           "default": "",
-          "description": "Herdr socket path. Empty = HERDR_SOCKET_PATH, then ~/.config/herdr/herdr.sock."
+          "description": "Herdr socket path. Empty = HERDR_SOCKET_PATH, then ~/.config/herdr/herdr.sock. Machine setting: ignored in workspace and folder settings.",
+          "scope": "machine"
         },
         "herdr.followMode": {
           "type": "boolean",
@@ -427,7 +419,7 @@
     "pretest": "tsc -p .",
     "test": "node out/test/mockTest.js && node out/test/viewTest.js && node out/test/usageTest.js && node out/test/gitTest.js",
     "package": "npm run codicons && tsc -p . && vsce package --allow-missing-repository --skip-license",
-    "install-local": "npm run package && code --install-extension herdr-bridge-$npm_package_version.vsix --force"
+    "install-local": "npm run package && code --install-extension herdr-hub-$npm_package_version.vsix --force"
   },
   "devDependencies": {
     "@lobehub/icons-static-svg": "^1.95.1",
@@ -436,5 +428,14 @@
     "@vscode/codicons": "^0.0.46-24",
     "@vscode/vsce": "^3.0.0",
     "typescript": "^5.4.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In untrusted windows the sidebar doesn't run git, and workspace settings can't mark the window as the Herdr hub.",
+      "restrictedConfigurations": [
+        "herdr.hubWindow"
+      ]
+    }
   }
 }
