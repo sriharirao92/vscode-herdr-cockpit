@@ -340,8 +340,10 @@
     <li>Everything shown comes from your Herdr server and from files on this machine. Shell output, agent screens and usage
       numbers never leave your computer. The only network request is Codex's own usage check, which Codex makes with its own login.</li>
     <li>Herdr Hub never reads the agents' logins or tokens. Claude's plan limits come only from the status line you opt into.</li>
-    <li>The git line runs only in trusted VS Code windows, and with commands a repository could define for itself
-      (fsmonitor, filters, signature checks) switched off, so a copied repository can't run code by being shown here.</li>
+    <li>The git line runs only in trusted VS Code windows (<b>Workspace Trust</b> is the safety boundary, as for VS Code's own
+      git support). On top of that, every git call switches off the commands a repository can define for itself that are
+      known to run during a status check (fsmonitor, file filters, signature checks, hooks, fetching), and skips the folder
+      entirely if it can't. Only trust windows you'd let run code from the repositories in your spaces.</li>
     <li><code>herdr.binaryPath</code> and <code>herdr.socketPath</code> count only in your user settings: a repository's own settings
       can't choose the program Herdr Hub runs.</li>
   </ul>

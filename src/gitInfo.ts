@@ -29,31 +29,52 @@ const TTL_MS = 8000;
 const cache = new Map<string, { at: number; info?: GitInfo; pending?: Promise<GitInfo | undefined> }>();
 
 /**
- * A repository's own config can make read-only git commands run programs: `core.fsmonitor` (status),
- * `filter.<driver>.clean|process` via .gitattributes (status, for recently touched files) and
- * `gpg.program` with `log.showSignature` (log). A repo copied from someone else could then run code just
- * by being shown in the sidebar, so every call turns these off. No shell is involved (execFile), and
- * callers also skip git entirely in untrusted VS Code windows.
+ * Git reads each repository's own config, and some settings make even read-only commands run programs.
+ * A repo copied from someone else (archive, shared drive) could then run code just by being shown in the
+ * sidebar. Defense in depth, on every call (no shell is involved: execFile with an argument list):
+ *  - core.fsmonitor=false                  status would run the repo's fsmonitor hook
+ *  - every filter.<driver> blanked         status runs clean filters for files whose content it re-checks
+ *  - log.showSignature=false               log would run gpg.program on signed commits
+ *  - protocol.allow=never                  a partial clone could lazily fetch, running core.sshCommand / ext:: remotes
+ *  - core.hooksPath=/dev/null              no repo hooks, should any command reach one
+ *  - --ignore-submodules=all (status)      submodules carry their own config
+ *  - --no-optional-locks, --no-pager       never write the index; never start a pager
+ * This closes the known routes but can't be proven complete, so the real boundary is VS Code's Workspace
+ * Trust: callers skip git entirely in untrusted windows (like VS Code's own git support).
  */
-const SAFE = ['--no-pager', '--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false'];
+const SAFE = [
+  '--no-pager',
+  '--no-optional-locks',
+  '-c', 'core.fsmonitor=false',
+  '-c', 'log.showSignature=false',
+  '-c', 'protocol.allow=never',
+  '-c', 'core.hooksPath=/dev/null',
+];
 
-function exec(args: string[]): Promise<string | undefined> {
+/** Exit code (or -1 when git couldn't run / timed out) and stdout. */
+function exec(args: string[]): Promise<{ code: number; out: string }> {
   return new Promise((resolve) =>
-    execFile(GIT, args, { timeout: 3000, maxBuffer: 4 * 1024 * 1024 }, (err, out) => resolve(err ? undefined : out.toString())),
+    execFile(GIT, args, { timeout: 3000, maxBuffer: 4 * 1024 * 1024 }, (err, out) =>
+      resolve({ code: !err ? 0 : typeof (err as any).code === 'number' && !(err as any).killed ? (err as any).code : -1, out: out?.toString() ?? '' }),
+    ),
   );
 }
 
 /**
- * `-c` overrides that disable every filter driver this repo's config defines (reading config runs
- * nothing). Undefined when a driver name can't be overridden safely: then don't run git at all.
+ * `-c` overrides that disable every filter driver the repo's config defines (reading config runs nothing).
+ * Fails closed: undefined (= don't run git) unless the config was read (exit 0, or 1 = no filters at all)
+ * and every driver name can be overridden.
  */
 export async function filterOverrides(cwd: string): Promise<string[] | undefined> {
-  const out = (await exec(['-C', cwd, 'config', '--null', '--get-regexp', '^filter\\.'])) ?? '';
+  const { code, out } = await exec(['-C', cwd, 'config', '--null', '--get-regexp', '^filter\\.']);
+  if (code !== 0 && !(code === 1 && out === '')) return undefined;
   const names = new Set<string>();
   for (const entry of out.split('\0')) {
     const key = entry.split('\n')[0];
+    if (!key) continue;
     const m = /^filter\.(.+)\.[^.]+$/.exec(key);
-    if (m) names.add(m[1]);
+    if (!m) return undefined; // unexpected shape: don't guess
+    names.add(m[1]);
   }
   const args: string[] = [];
   for (const name of names) {
@@ -66,7 +87,8 @@ export async function filterOverrides(cwd: string): Promise<string[] | undefined
 async function run(cwd: string, args: string[]): Promise<string | undefined> {
   const filters = await filterOverrides(cwd);
   if (!filters) return undefined;
-  return exec([...SAFE, ...filters, '-C', cwd, ...args]);
+  const { code, out } = await exec([...SAFE, ...filters, '-C', cwd, ...args]);
+  return code === 0 ? out : undefined;
 }
 
 const UNMERGED = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);

@@ -8,7 +8,7 @@ into **one** VS Code window. Goal: keep Herdr's spaces/agents workflow but get t
 The user runs Herdr in the macOS terminal. Their agents include Claude Code, Codex and Kiro. The extension is a **client of the
 Herdr server**. It never owns agent processes; Herdr does.
 
-Status: working prototype (v0.0.19), installed and tried by the user on macOS against a real Herdr
+Status: working prototype (v0.0.20), installed and tried by the user on macOS against a real Herdr
 server (installed binary: herdr 0.9.1, socket protocol 22; the online docs were at 0.9.3). Confirmed working in real use: sidebar lists real
 spaces/agents, space switching, attach terminals.
 
@@ -105,7 +105,7 @@ After upgrading Herdr: `npm run gen:types`, fix compile errors, and save a new `
 9. Bundle with esbuild. Add an ESLint config and CI. Swap the placeholder `repository` URL in package.json for the real one.
 
 ## Conventions
-- **Security (from a commit review):** git runs only in trusted windows, with `--no-optional-locks`, `core.fsmonitor=false`, `log.showSignature=false`, every repo-defined `filter.<driver>` blanked (`filterOverrides()`; skip git if a driver name can't be overridden) and `--ignore-submodules=all`: a repo's own `.git/config` can otherwise make `git status`/`log` run programs (fsmonitor, clean filters, gpg.program). gitTest proves each vector stays off. `herdr.binaryPath`/`socketPath` are `machine`-scoped so a repository's `.vscode/settings.json` can't pick the program we launch. The hub is recognised only by its workspace file (`~/.herdr-hub/herdr-hub.code-workspace`), not by a `herdr.hubWindow` workspace setting alone. Keep these when touching git, settings or process launches; never put real paths, hosts, names or ids in tests/fixtures/docs (the repo was scrubbed once).
+- **Security (from a commit review):** git runs only in trusted windows (Workspace Trust is the real boundary; the list below closes known routes but can't be proven complete), with `--no-optional-locks`, `core.fsmonitor=false`, `log.showSignature=false`, `protocol.allow=never` (no lazy fetch in partial clones → no core.sshCommand/ext::), `core.hooksPath=/dev/null`, every repo-defined `filter.<driver>` blanked (`filterOverrides()` fails closed: any config-read error other than exit 1, or an unexpressible driver name → skip git) and `--ignore-submodules=all`: a repo's own `.git/config` can otherwise make `git status`/`log` run programs (fsmonitor, clean filters, gpg.program). gitTest proves each vector stays off. `herdr.binaryPath`/`socketPath` are `machine`-scoped so a repository's `.vscode/settings.json` can't pick the program we launch. The hub is recognised only by its workspace file (`~/.herdr-hub/herdr-hub.code-workspace`), not by a `herdr.hubWindow` workspace setting alone. Keep these when touching git, settings or process launches; never put real paths, hosts, names or ids in tests/fixtures/docs (the repo was scrubbed once).
 - TypeScript strict. Keep `herdrClient.ts` and `model.ts` free of `vscode` imports so `npm test` runs without VS Code.
 - Add a mock-server test for any new socket method.
 - Never write workspace folder index 0.
