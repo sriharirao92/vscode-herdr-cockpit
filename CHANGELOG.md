@@ -2,10 +2,11 @@
 
 Herdr Hub (the editor extension) and the Herdr plugin (`plugin/`) are released together from this repository.
 
-## Unreleased
+## 0.1.2 (2026-10-06)
 
 - A window opened without a folder (a new window, or the editor's first launch) offers **Open Herdr Hub**, which turns it into the hub window (`herdr.offerHubOnStartup`: `emptyWindows`, `allWindows`, `never`). It stays quiet when Herdr isn't installed or a hub window is already open.
 - Opening a space closes the editor's Welcome page, and the hub window opens without one (`workbench.startupEditor` = `none` for the hub workspace, unless you set it).
+- Help page: a Getting started section, and coverage of Split Terminal, tab renames, closing tabs in Herdr and copy feedback.
 
 ## 0.1.0 (2026-10-06)
 
