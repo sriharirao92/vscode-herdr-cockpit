@@ -2,7 +2,9 @@
 
 Herdr Hub (the editor extension) and the Herdr plugin (`plugin/`) are released together from this repository.
 
-## Unreleased
+## 0.1.0 (2026-10-06)
+
+First public release. Tested with Herdr 0.9.3 on macOS: in VS Code by hand and with an automated real-editor test, in Positron by hand, and started in Cursor. Kiro installs it but hasn't been tried by hand yet. Unit tests run on macOS and Linux.
 
 ### Extension
 - **Links from Herdr**: `<editor>://sriharirao.herdr-hub/open|review|file`, used by the Herdr plugin. Links act in the hub window; a link that reaches another window is handed over to it (and the hub window is created or focused).
@@ -10,6 +12,11 @@ Herdr Hub (the editor extension) and the Herdr plugin (`plugin/`) are released t
 - **Install the Herdr Plugin** command.
 - **Agents left, shells right**: `herdr.terminalLocation` = `editorSplit`.
 - Terminal tabs show just their name in any saved or untitled workspace you've switched spaces from, not only the hub window.
+- **Terminal tabs work like the Herdr TUI**: Herdr Hub draws each tab from Herdr's live stream of the pane (instead of running `herdr attach` in it). Drag, double-click or triple-click selects and copies, with a "Copied to clipboard" note; the wheel scrolls Herdr's scrollback; a click goes to the program in the pane (Herdr 0.9.2+). The terminal "+" opens the same kind of tab.
+- **Tabs and Herdr stay in sync**: closing a tab with its X closes the pane in Herdr (`herdr.closeTabInHerdr`: idle shells at once; agents, busy shells and a space's last tab ask first). Switching spaces and closing the window only detach. Verified in a real VS Code by `npm run test:vscode`.
+- **Split Terminal** on a Herdr tab splits that pane in Herdr (same Herdr tab); **renaming** a tab renames the pane (or agent) in Herdr, and Herdr renames update the tab without taking focus.
+- Herdr tabs stay in one editor group (the one already showing them, else the last one used) instead of following the active group.
+- Tested with Herdr 0.9.3 (protocol 22, unchanged from 0.9.1).
 - Clicking a space outside the hub window asks first: **Open Hub Window** (the space and pane open there) or **Use This Window** (remembered per window). A window with no folder goes straight to the hub window.
 - **Linux**: Herdr, git and Codex are found in Linux install locations (`~/.local/bin`, Linuxbrew, `/usr/bin`, Nix, Snap); help shows Ctrl+Shift+P on Linux.
 - **Remote**: the extension runs where your workspace is (`extensionKind: workspace`), so with Remote-SSH it runs on the server next to Herdr.

@@ -4,9 +4,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { HerdrClient, resolveSocketPath, Subscription, subscriptionsFor } from './herdrClient';
 import { AgentStatus, attachOrder, Model, normalize, Pane, Space } from './model';
-import type { SessionSnapshotResult } from './herdrTypes';
+import type { PaneProcessInfoResult, SessionSnapshotResult } from './herdrTypes';
 import { HerdrPanel, PanelAction } from './panel';
-import { ActivityTarget, ActivityWatcher } from './activity';
+import { ActivityTarget, ActivityWatcher, describeProcess, isShellProcess, leaderProcess } from './activity';
 import { buildViewState, paneName, ViewConnection } from './viewState';
 import { agentLogo } from './agentLogos';
 import { gitInfo } from './gitInfo';
@@ -17,7 +17,7 @@ import { editorCli, ensureHubWorkspace, hubDir, hubWorkspaceFile, HubStatus, isI
 import { HERDR_PROTOCOL } from './herdrTypes';
 import { reviewChanges } from './review';
 import { showHelp } from './help';
-import { HerdrActions } from './herdrActions';
+import { agentSlug, HerdrActions } from './herdrActions';
 import { closeInHerdr, ManageDeps, newSpace, newTab, rename } from './manage';
 import { registerProfiles, SHELL_PROFILE_TITLE } from './profiles';
 import { codexBinary, codexLiveUsage, ProviderUsage, readUsage } from './usage';
@@ -82,6 +82,11 @@ const PANEL_COMMANDS: Record<string, string> = {
 export function activate(ctx: vscode.ExtensionContext) {
   const cfg = () => vscode.workspace.getConfiguration('herdr');
   const log = vscode.window.createOutputChannel('Herdr Hub');
+  // The integration test (src/test/vscode) reads the log from the console.
+  if (process.env.HERDR_HUB_TEST_SESSION) {
+    const append = log.appendLine.bind(log);
+    log.appendLine = (line: string) => (console.log(`[herdr-hub log] ${line}`), append(line));
+  }
   const client = new HerdrClient(() => resolveSocketPath(cfg().get<string>('socketPath')));
   // When did each agent enter its current state? (observed locally; Herdr exposes only a sequence number)
   const stateSince = new Map<string, { status?: AgentStatus; at: number }>();
@@ -98,7 +103,6 @@ export function activate(ctx: vscode.ExtensionContext) {
     return !logo ? undefined : logo.mono ? { light: logoUri(`${logo.file}-light`), dark: logoUri(`${logo.file}-dark`) } : logoUri(logo.file);
   };
   const terms = new AttachTerminals(
-    () => resolveBinary(cfg().get<string>('binaryPath')),
     () => cfg().get<TerminalLocationSetting>('terminalLocation', 'editor'),
     (pane, startingAs) => {
       const tab = model?.spaces.flatMap((s) => s.tabs).find((t) => t.id === pane.tabId);
@@ -109,12 +113,21 @@ export function activate(ctx: vscode.ExtensionContext) {
       };
     },
     () => scheduleRender(),
+    {
+      binary: () => resolveBinary(cfg().get<string>('binaryPath')),
+      env: () => herdrEnvNow(),
+      log: (line) => log.appendLine(line),
+    },
+    (paneId) => void closedTabByUser(paneId).catch((e) => log.appendLine(`close in Herdr: ${e?.message ?? e}`)),
+    (paneId, name) => void renamedTabByUser(paneId, name).catch((e) => log.appendLine(`rename in Herdr: ${e?.message ?? e}`)),
   );
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = 'herdr.focusAttention';
   status.show();
 
   let model: Model | undefined;
+  /** Each pane's name at the last snapshot, to notice renames made in Herdr. */
+  const paneNames = new Map<string, string>();
   /** Set further down: write the hub window's status file for the Herdr plugin (debounced). */
   let scheduleHubStatus = () => {};
   let eventsLive = false;
@@ -230,6 +243,54 @@ export function activate(ctx: vscode.ExtensionContext) {
     else if (pick === 'Retry') kick();
   }
 
+  /**
+   * You closed a Herdr tab yourself: close the pane in Herdr too (herdr.closeTabInHerdr). Asks first for an
+   * agent, a shell running something, or the last tab of a space (Herdr then closes the whole space).
+   */
+  async function closedTabByUser(paneId: string) {
+    const mode = cfg().get<'ask' | 'always' | 'never'>('closeTabInHerdr', 'ask');
+    const hit = paneOf({ paneId });
+    if (mode === 'never' || !hit || !isConnected()) return;
+    const { space, pane } = hit;
+    const name = paneName(space.tabs.find((t) => t.id === pane.tabId), pane);
+    let running: string | undefined;
+    if (!pane.isAgent) {
+      const info = await client.request<PaneProcessInfoResult>('pane.process_info', { pane_id: paneId }).then((r) => r.process_info).catch(() => undefined);
+      const lead = leaderProcess(info);
+      if (lead && !isShellProcess(lead.name)) running = describeProcess(lead);
+    }
+    const last = space.tabs.flatMap((t) => t.panes).length === 1;
+    if (last || (mode === 'ask' && (pane.isAgent || running))) {
+      const detail = [
+        pane.isAgent ? `${name} is an agent: closing it in Herdr stops it.` : running ? `It's running ${running}.` : undefined,
+        last ? `It's the last tab of "${space.label}", so Herdr closes the space too.` : undefined,
+        'Keep Running leaves it in Herdr; click it in the sidebar to open it again.',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const pick = await vscode.window.showWarningMessage(`Close ${name} in Herdr too?`, { modal: true, detail }, 'Close in Herdr', 'Keep Running');
+      if (pick !== 'Close in Herdr') return;
+    }
+    await manage.actions.closePane(paneId);
+    log.appendLine(`closed ${paneId} in Herdr (tab closed)`);
+    kick();
+  }
+
+  /** You renamed a Herdr tab: rename the shell's pane, or the agent, in Herdr to match. */
+  async function renamedTabByUser(paneId: string, name: string) {
+    const hit = paneOf({ paneId });
+    const label = name.trim();
+    if (!hit || !label || !isConnected()) return;
+    if (hit.pane.isAgent) {
+      // Herdr agent names are identifiers (they're also CLI targets).
+      const slug = agentSlug(label);
+      if (!slug) return void vscode.window.showWarningMessage(`Herdr: agent names use lowercase letters, digits, - and _; "${label}" stays a VS Code tab name only.`);
+      await manage.actions.renameAgent(paneId, slug);
+    } else await manage.actions.renamePane(paneId, label);
+    log.appendLine(`renamed ${paneId} in Herdr: "${label}" (tab renamed)`);
+    kick();
+  }
+
   /** Back after an outage: the space's tabs died with Herdr; offer to open them again. */
   async function offerReopen(lost: { id: string; label: string }) {
     if (!terms.hasExited()) return; // a quick handoff: the tabs survived
@@ -242,11 +303,12 @@ export function activate(ctx: vscode.ExtensionContext) {
     else vscode.window.showWarningMessage(`Herdr: "${lost.label}" isn't in Herdr anymore.`);
   }
 
-  // Poll: fast without an event stream, slowly as a safety net with one, backing off while Herdr is down.
+  // Poll: fast without an event stream, every 5s as a safety net with one (Herdr sends no event for pane
+  // renames, so that's how they arrive), backing off while Herdr is down.
   let pollTimer: NodeJS.Timeout | undefined;
   function schedulePoll() {
     clearTimeout(pollTimer);
-    const delay = isConnected() ? (eventsLive ? 15_000 : 1500) : conn.kind === 'reconnecting' ? 1000 : backoffDelay(failures);
+    const delay = isConnected() ? (eventsLive ? 5000 : 1500) : conn.kind === 'reconnecting' ? 1000 : backoffDelay(failures);
     pollTimer = setTimeout(async () => {
       await refresh();
       startEvents();
@@ -439,6 +501,15 @@ export function activate(ctx: vscode.ExtensionContext) {
   function apply(next: Model) {
     const prev = model;
     model = next;
+    // Renamed in Herdr (TUI, CLI, sidebar): rename its tab here too, without focusing it.
+    for (const sp of next.spaces)
+      for (const tab of sp.tabs)
+        for (const p of tab.panes) {
+          const n = paneName(tab, p);
+          const was = paneNames.get(p.id);
+          if (was !== undefined && was !== n && terms.has(p.id)) terms.rename(p.id, n);
+          paneNames.set(p.id, n);
+        }
     renderStatus();
 
     // Notifications on agent transitions.
@@ -547,7 +618,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       return false;
     }
     await ctx.workspaceState.update(MANAGED_KEY, true);
-    nameOnlyTabs();
+    terminalDefaults();
     render();
     return true;
   }
@@ -661,7 +732,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     },
     agentNames: () => model?.spaces.flatMap((s) => s.agents.map((a) => a.raw.agent?.name).filter((n): n is string => !!n)) ?? [],
     agents: () => cfg().get<string[]>('agents', ['claude', 'codex', 'kiro', 'cursor']),
-    renameTerminal: (paneId, name) => terms.rename(paneId, name),
+    renameTerminal: async (paneId, name) => terms.rename(paneId, name),
     ensureConnected: () => ensureConnected(),
     log: (m) => log.appendLine(m),
   };
@@ -684,8 +755,9 @@ export function activate(ctx: vscode.ExtensionContext) {
     registerProfiles({
       ...manage,
       targetSpace,
-      binary: () => resolveBinary(cfg().get<string>('binaryPath')),
-      adopt: (paneId, spaceId, term) => terms.adopt(paneId, spaceId, term),
+      newPty: (target) => terms.newPty(target),
+      adopt: (paneId, spaceId, term, pty, name) => terms.adopt(paneId, spaceId, term, pty, name),
+      paneOf: (term) => terms.paneOf(term),
       startHerdr: () => startHerdr(),
     }),
     log,
@@ -1040,22 +1112,26 @@ export function activate(ctx: vscode.ExtensionContext) {
   });
 
   /**
-   * Terminal tabs show just their name. The editor's default tab description adds the cwd folder
-   * ("my-project") and can't be set per terminal, so turn it off for this workspace: in the hub, and in any
-   * window you've switched spaces from that is a saved or untitled workspace (the setting then lives in its
-   * workspace file, never in a repository's .vscode/settings.json). Set once; a value you chose is left alone.
+   * Terminal settings that suit Herdr tabs, for this workspace only: in the hub, and in any window you've
+   * switched spaces from that is a saved or untitled workspace (they then live in its workspace file, never in
+   * a repository's .vscode/settings.json). Set once; a value you chose (here, or in user settings for those
+   * marked so) is left alone.
+   *  - tabs.description: tabs show just their name; the default adds the cwd folder and can't be set per terminal.
    */
-  function nameOnlyTabs() {
+  function terminalDefaults() {
     const hub = isHubWindow();
     if (!hub && !(isManagedWindow() && vscode.workspace.workspaceFile)) return;
     const term = vscode.workspace.getConfiguration('terminal.integrated');
-    const set = term.inspect('tabs.description');
-    if (set?.workspaceValue !== undefined || (!hub && set?.globalValue !== undefined)) return;
-    term.update('tabs.description', HUB_TAB_DESCRIPTION, vscode.ConfigurationTarget.Workspace).then(undefined, (e) =>
-      log.appendLine(`could not set terminal.integrated.tabs.description: ${e?.message ?? e}`),
-    );
+    const once = (key: string, value: unknown, respectUser: boolean) => {
+      const set = term.inspect(key);
+      if (set?.workspaceValue !== undefined || (respectUser && set?.globalValue !== undefined)) return;
+      term.update(key, value, vscode.ConfigurationTarget.Workspace).then(undefined, (e) =>
+        log.appendLine(`could not set terminal.integrated.${key}: ${e?.message ?? e}`),
+      );
+    };
+    once('tabs.description', HUB_TAB_DESCRIPTION, !hub);
   }
-  nameOnlyTabs();
+  terminalDefaults();
 
   // Hub window: make "+" create Herdr tabs here: "Herdr Shell" becomes this workspace's default profile.
   // VS Code only applies a workspace default profile in a trusted workspace.

@@ -1,21 +1,32 @@
-// Each Herdr agent/pane becomes a native VS Code terminal running
-// `herdr agent attach <pane>` (or `herdr terminal attach <terminal_id>`).
-// Closing the VS Code terminal only detaches; the process keeps running in Herdr.
+// Each Herdr agent or shell pane becomes a terminal tab the extension draws itself from Herdr's stream
+// (builtinTerminal.ts): drag to select and copy like the Herdr TUI, wheel to scroll Herdr's scrollback.
+// Closing the tab only detaches; the process keeps running in Herdr.
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import type { Pane } from './model';
+import { BuiltinDeps, HerdrPty } from './builtinTerminal';
 
 export { resolveBinary } from './connection';
 
 interface Entry {
   term: vscode.Terminal;
   spaceId: string;
+  /** The stream can end (Herdr stopped, pane closed) while the tab stays open with a note. */
+  pty?: HerdrPty;
+  /** Editor group the tab was opened in. */
+  column?: vscode.ViewColumn;
+  /** The name we gave the tab (or accepted from a rename). */
+  name?: string;
+  /** terminal.name when last polled: renames only show up there (VS Code has no rename event). */
+  seen?: string;
 }
 
-/** How a pane's terminal tab looks: same name as its row in the sidebar, agent logo as the icon. */
+/** The tab still shows the pane: open, and its stream hasn't ended. */
+const live = (e: Entry) => e.term.exitStatus === undefined && !e.pty?.ended;
+
 /** herdr.terminalLocation */
 export type TerminalLocationSetting = 'editor' | 'editorSplit' | 'panel';
 
+/** How a pane's terminal tab looks: same name as its row in the sidebar, agent logo as the icon. */
 export interface TerminalLook {
   name: string;
   iconPath: vscode.TerminalOptions['iconPath'];
@@ -24,105 +35,138 @@ export interface TerminalLook {
 export class AttachTerminals implements vscode.Disposable {
   private byPane = new Map<string, Entry>();
   private sub: vscode.Disposable;
+  /** The editor group Herdr tabs were last opened in, to keep them together across switches. */
+  private lastColumn?: vscode.ViewColumn;
+  private namePoll: NodeJS.Timeout;
 
   constructor(
-    private binary: () => string,
     private location: () => TerminalLocationSetting,
     /** startingAs: agent kind being started in a pane that is still a plain shell. */
     private look: (pane: Pane, startingAs?: string) => TerminalLook,
     /** Called whenever the set of attached panes changes. */
-    private onChange: () => void = () => {},
+    private onChange: () => void,
+    private deps: Omit<BuiltinDeps, 'onEnded'>,
+    /**
+     * You closed a live tab yourself (its X, Kill Terminal): exit reason User. Tabs we dispose (space switch,
+     * pane gone) report Extension, and a closing window Shutdown, so those only ever detach.
+     */
+    private onUserClose: (paneId: string) => void = () => {},
+    /** You renamed a tab (its Rename... menu): VS Code updates terminal.name but fires no event, so poll. */
+    private onUserRename: (paneId: string, name: string) => void = () => {},
   ) {
+    this.namePoll = setInterval(() => this.pollNames(), 1000);
     this.sub = vscode.window.onDidCloseTerminal((t) => {
       for (const [k, e] of this.byPane)
         if (e.term === t) {
+          const wasLive = !e.pty?.ended;
           this.byPane.delete(k);
           this.onChange();
+          if (wasLive && t.exitStatus?.reason === vscode.TerminalExitReason.User) this.onUserClose(k);
         }
     });
   }
 
-  /** A live attach terminal is open for this pane (one whose process exited, e.g. Herdr stopped, doesn't count). */
+  /** A tab for a pane, drawn from Herdr's stream: the pane id, or how to create the pane once the tab opens. */
+  newPty(target: string | (() => Promise<string>)): HerdrPty {
+    return new HerdrPty(target, { ...this.deps, onEnded: () => this.onChange() });
+  }
+
+  /** The pane (and space) a tab shows, if it's one of ours. */
+  paneOf(term: vscode.Terminal | undefined): { paneId: string; spaceId: string } | undefined {
+    for (const [paneId, e] of this.byPane) if (e.term === term && live(e)) return { paneId, spaceId: e.spaceId };
+  }
+
+  /**
+   * A changed terminal.name we didn't set is a rename by you. Our own renames (setName) arrive in
+   * terminal.name a moment later and match `name`, so they're not echoed back.
+   */
+  private pollNames() {
+    for (const [paneId, e] of this.byPane) {
+      if (!live(e)) continue;
+      const cur = e.term.name;
+      if (cur === e.seen) continue;
+      e.seen = cur;
+      if (cur === e.name) continue;
+      e.name = cur;
+      this.onUserRename(paneId, cur);
+    }
+  }
+
+  /** A live tab is open for this pane (one whose stream ended, e.g. Herdr stopped, doesn't count). */
   has(paneId: string) {
     const e = this.byPane.get(paneId);
-    return !!e && e.term.exitStatus === undefined;
+    return !!e && live(e);
   }
 
-  /** Live attach tabs. */
+  /** Live tabs. */
   count(): number {
-    return [...this.byPane.values()].filter((e) => e.term.exitStatus === undefined).length;
+    return [...this.byPane.values()].filter(live).length;
   }
 
-  /** Spaces that have attach terminals open (live or not), e.g. to reopen them after Herdr restarts. */
+  /** Spaces that have tabs open (live or not), e.g. to reopen them after Herdr restarts. */
   spaces(): string[] {
     return [...new Set([...this.byPane.values()].map((e) => e.spaceId))];
   }
 
-  /** Some attach tab's process has exited (Herdr stopped under it). */
+  /** Some tab lost its pane (Herdr stopped under it). */
   hasExited(): boolean {
-    return [...this.byPane.values()].some((e) => e.term.exitStatus !== undefined);
+    return [...this.byPane.values()].some((e) => !live(e));
   }
 
-  /** Close tabs whose attach process has exited (Herdr stopped under them). */
+  /** Close tabs that lost their pane. */
   disposeExited() {
-    this.closeWhere((e) => e.term.exitStatus !== undefined);
+    this.closeWhere((e) => !live(e));
+  }
+
+  /**
+   * The editor group for a new tab. Herdr tabs stay together: in the group that already shows them, else the
+   * one they were in last (if it still exists), else the active group. Opening into "the active group" each
+   * time split them whenever focus was in another group (e.g. a file opened beside the terminals).
+   */
+  private editorColumn(): vscode.ViewColumn {
+    const groups = new Set(vscode.window.tabGroups.all.map((g) => g.viewColumn));
+    const counts = new Map<vscode.ViewColumn, number>();
+    for (const e of this.byPane.values()) if (live(e) && e.column && groups.has(e.column)) counts.set(e.column, (counts.get(e.column) ?? 0) + 1);
+    const busiest = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (busiest) return busiest;
+    if (this.lastColumn && groups.has(this.lastColumn)) return this.lastColumn;
+    return vscode.window.tabGroups.activeTabGroup?.viewColumn ?? vscode.ViewColumn.One;
   }
 
   attach(pane: Pane, opts: { preserveFocus?: boolean; startingAs?: string } = {}): vscode.Terminal | undefined {
     const existing = this.byPane.get(pane.id);
-    if (existing && existing.term.exitStatus === undefined) {
+    if (existing && live(existing)) {
       existing.term.show(opts.preserveFocus);
       return existing.term;
     }
-    // Its process exited (Herdr stopped or restarted): replace the dead tab with a fresh attach.
+    // Its stream ended (Herdr stopped or restarted): replace the dead tab.
     if (existing) {
       existing.term.dispose();
       this.byPane.delete(pane.id);
     }
-    const args = pane.isAgent
-      ? ['agent', 'attach', pane.id, '--takeover']
-      : pane.terminalId
-        ? ['terminal', 'attach', pane.terminalId]
-        : undefined;
-    if (!args) {
-      vscode.window.showWarningMessage(`Herdr: pane ${pane.id} has no terminal id to attach to.`);
-      return;
-    }
-    // editorSplit: agents in the first editor group, shells in the second (VS Code creates it when needed).
     const where = this.location();
-    const location =
-      where === 'panel'
-        ? vscode.TerminalLocation.Panel
-        : {
-            viewColumn: where === 'editorSplit' ? (pane.isAgent ? vscode.ViewColumn.One : vscode.ViewColumn.Two) : vscode.ViewColumn.Active,
-            preserveFocus: !!opts.preserveFocus,
-          };
+    // editorSplit: agents in the first editor group, shells in the second (created when needed).
+    const column = where === 'panel' ? undefined : where === 'editorSplit' ? (pane.isAgent ? vscode.ViewColumn.One : vscode.ViewColumn.Two) : this.editorColumn();
+    const location = column === undefined ? vscode.TerminalLocation.Panel : { viewColumn: column, preserveFocus: !!opts.preserveFocus };
     const { name, iconPath } = this.look(pane, opts.startingAs);
-    const term = vscode.window.createTerminal({
-      name,
-      shellPath: this.binary(),
-      shellArgs: args,
-      cwd: pane.cwd && fs.existsSync(pane.cwd) ? pane.cwd : undefined,
-      iconPath,
-      location,
-      isTransient: true, // don't try to restore a dead attach on window reload
-      // These aren't shells: keystrokes go straight to the agent. Extensions that type into new
-      // terminals (Python Environments sends `source .venv/bin/activate`) skip hideFromUser
-      // terminals, so mark them; show() below reveals it in its location as usual.
-      hideFromUser: true,
-    });
-    this.byPane.set(pane.id, { term, spaceId: pane.workspaceId });
+    const pty = this.newPty(pane.id);
+    const term = vscode.window.createTerminal({ name, pty, iconPath, location, isTransient: true });
+    this.byPane.set(pane.id, { term, spaceId: pane.workspaceId, pty, column, name, seen: name });
+    if (where === 'editor' && column) this.lastColumn = column;
     this.onChange();
-    term.show(opts.preserveFocus);
+    // An editor-area tab opens where `location` says. show() again could move it to the active group, so
+    // only the panel needs it (createTerminal doesn't reveal the panel).
+    if (column === undefined) term.show(opts.preserveFocus);
     return term;
   }
 
   /**
-   * Track a terminal VS Code created itself (the "+" button with a Herdr profile), so it counts as
+   * Track a terminal the editor created itself (the "+" button with a Herdr profile), so it counts as
    * attached, closes on space switch and is reused when you click its row.
    */
-  adopt(paneId: string, spaceId: string, term: vscode.Terminal) {
-    this.byPane.set(paneId, { term, spaceId });
+  adopt(paneId: string, spaceId: string, term: vscode.Terminal, pty?: HerdrPty, name = term.name) {
+    this.byPane.set(paneId, { term, spaceId, pty, name, seen: term.name });
+    if (name !== term.name) pty?.setName(name);
     this.onChange();
   }
 
@@ -131,17 +175,15 @@ export class AttachTerminals implements vscode.Disposable {
     for (const e of this.byPane.values()) if (e.term === term) return e.spaceId;
   }
 
-  /** Rename an open tab after its pane was renamed (VS Code can only rename the active terminal). */
-  async rename(paneId: string, name: string) {
+  /** Rename an open tab after its pane was renamed in Herdr, without focusing it. */
+  rename(paneId: string, name: string) {
     const e = this.byPane.get(paneId);
-    if (!e) return;
-    e.term.show(false);
-    await vscode.commands
-      .executeCommand('workbench.action.terminal.renameWithArg', { name })
-      .then(undefined, () => undefined);
+    if (!e || e.name === name) return;
+    e.name = name;
+    e.pty?.setName(name);
   }
 
-  /** Detach (close) attach terminals belonging to other spaces. */
+  /** Detach (close) tabs belonging to other spaces. */
   closeOtherSpaces(keepSpaceId: string) {
     this.closeWhere((e) => e.spaceId !== keepSpaceId);
   }
@@ -165,5 +207,6 @@ export class AttachTerminals implements vscode.Disposable {
 
   dispose() {
     this.sub.dispose();
+    clearInterval(this.namePoll);
   }
 }

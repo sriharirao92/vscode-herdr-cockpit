@@ -284,7 +284,12 @@
   <ul>
     <li>Click any agent or shell row to open it in a VS Code terminal tab. The tab has the <b>same name</b> as the row and the agent's logo as its icon. Clicking again brings the existing tab forward.</li>
     <li>Agents open with <b>takeover</b>: your keystrokes go to the agent from this tab.</li>
-    <li><b>Closing a tab only detaches.</b> The agent or shell keeps running in Herdr. Inside the tab, <kbd>ctrl</kbd>+<kbd>b</kbd> then <kbd>q</kbd> also detaches.</li>
+    <li><b>Selecting and copying text</b> works like the Herdr TUI: drag to select, double-click a word, triple-click a line. The text is copied when you let go, and a green <b>Copied to clipboard</b> note flashes at the bottom of the tab. The mouse wheel scrolls the pane's scrollback in Herdr.</li>
+    <li>A click without dragging goes to the program in the pane (Herdr 0.9.2 or newer), so buttons in mouse-aware programs such as Kiro still work.</li>
+    <li>Herdr Hub draws these tabs from Herdr's live stream of the pane; there is no shell inside them, so every key goes straight to the agent or shell in Herdr.</li>
+    <li><b>Closing a tab with its X closes it in Herdr too</b> (setting <code>herdr.closeTabInHerdr</code>). An idle shell closes right away. For an agent, a shell that's running something, or a space's last tab (Herdr then closes the space), it asks first: <b>Keep Running</b> leaves it in Herdr. Switching spaces, and closing or reloading the window, never close anything in Herdr: those tabs only detach.</li>
+    <li>The terminal <b>+</b> creates a new tab in the current Herdr space, and <b>Split Terminal</b> on a Herdr tab splits that pane in Herdr (in the editor area; in the bottom panel a split makes a new Herdr tab). A pane you close in Herdr closes its tab here.</li>
+    <li><b>Renaming</b> a tab (right-click → Rename) renames the shell's pane in Herdr, or the agent (agent names become lowercase, like <code>reviewer-bot</code>). A pane renamed in Herdr renames its tab here within a few seconds.</li>
     <li>In the hub window, tabs show only their name. Elsewhere VS Code adds the folder name after it; to hide that in every window, set <code>terminal.integrated.tabs.description</code> to <code>${task}</code> in your user settings.</li>
     <li>Clicking a space opens all its panes as tabs, in order: agents (most urgent first), then shells.</li>
     <li>Switching spaces closes the previous space's tabs (setting <code>herdr.closeTerminalsOnSwitch</code>). Tabs open in the editor area, the editor area split into agents (left) and shells (right), or the bottom panel (<code>herdr.terminalLocation</code>).</li>
@@ -404,6 +409,7 @@
 <section id="trouble">
   <h2>Troubleshooting</h2>
   <dl>
+    <dt>Terminal tabs open in another editor group</dt><dd>Herdr tabs open next to the Herdr tabs already open, else in the group they used last, else in the active group. To move them, drag a tab to the group you want. <code>herdr.terminalLocation</code> = <code>editorSplit</code> puts agents on the left and shells on the right.</dd>
     <dt>Terminal tabs show a folder name after their name</dt><dd>The editor adds the terminal's folder to each tab, and it can't be turned off per terminal. Herdr Hub turns it off for the hub window, and for any saved or untitled workspace you've switched spaces from (reload the window if it was already open). In a window with a single folder it leaves your repository's settings alone: to hide it everywhere, set <code>terminal.integrated.tabs.description</code> to <code>${task}</code> in your user settings.</dd>
     <dt>Herdr Hub's tab is last in the sidebar (Positron, Kiro)</dt><dd>Editors don't let extensions choose their tab's position. Drag the <b>Herdr Hub</b> tab to where you want it; the editor remembers the order.</dd>
     <dt>Can't find the Herdr Hub sidebar (Cursor and other editors)</dt><dd>Open it from the Command Palette: <b>Herdr Hub: Focus on Spaces &amp; Agents View</b>.

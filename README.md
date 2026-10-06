@@ -54,6 +54,7 @@ All settings start with `herdr.`; the guide (`?` in the sidebar) lists them. Mos
 |---|---|
 | `herdr.terminalLocation` | `editor`, `editorSplit` (agents left, shells right) or `panel` |
 | `herdr.autoAttachShells` | Also open plain shells when switching spaces |
+| `herdr.closeTabInHerdr` | Closing a tab's X closes it in Herdr: `ask` (idle shells close at once; agents and busy shells ask), `always`, `never` |
 | `herdr.startServer` | Start Herdr when the hub window opens: `ask`, `always`, `never` |
 | `herdr.binaryPath`, `herdr.socketPath` | A herdr binary or socket (named session) Herdr Hub doesn't find itself |
 

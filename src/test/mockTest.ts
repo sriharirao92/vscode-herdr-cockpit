@@ -7,7 +7,7 @@ import * as assert from 'assert';
 import { HerdrClient, HerdrError, DEFAULT_SUBSCRIPTIONS, subscriptionsFor } from '../herdrClient';
 import { normalize } from '../model';
 import { ActivityWatcher } from '../activity';
-import { HerdrActions, agentName, agentTitle } from '../herdrActions';
+import { HerdrActions, agentName, agentSlug, agentTitle } from '../herdrActions';
 
 import type { AgentInfo, PaneInfo, SessionSnapshotResult, TabInfo, WorkspaceInfo } from '../herdrTypes';
 
@@ -277,6 +277,7 @@ async function main() {
   );
   assert.deepStrictEqual([agentTitle('kiro'), agentTitle('agy'), agentTitle('newagent')], ['Kiro', 'Antigravity', 'Newagent']);
   assert.deepStrictEqual([agentName('claude', []), agentName('claude', ['claude', 'claude-2']), agentName('Mastra Code', [])], ['claude', 'claude-3', 'mastra-code']);
+  assert.deepStrictEqual(['Reviewer Bot', '  2nd try!', 'ok_name-1', '???', 'É'].map(agentSlug), ['reviewer-bot', 'nd-try', 'ok_name-1', undefined, undefined]);
   console.log('✓ create space/tab/worktree, start agent, rename, close');
 
   // 4. subscription: ack is swallowed, events delivered, close reported

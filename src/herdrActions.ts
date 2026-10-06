@@ -7,6 +7,8 @@ import type {
   AgentInfo,
   AgentStartedResult,
   PaneInfo,
+  PaneInfoResult,
+  PaneSplitParams,
   TabCreatedResult,
   TabCreateParams,
   TabInfo,
@@ -48,6 +50,17 @@ export const AGENT_KINDS: Record<string, string> = {
 
 /** Herdr's rule for agent names (they double as CLI targets): lowercase, digits, - and _. */
 export const AGENT_NAME = /^[a-z][a-z0-9_-]{0,31}$/;
+
+/** A valid agent name from any text ("Reviewer Bot" -> "reviewer-bot"); undefined when nothing usable is left. */
+export function agentSlug(text: string): string | undefined {
+  const s = text
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^[^a-z]+/, '')
+    .slice(0, 32)
+    .replace(/-+$/, '');
+  return AGENT_NAME.test(s) ? s : undefined;
+}
 
 /** A free agent name for a new agent of this kind: "claude", then "claude-2", "claude-3", ... */
 export function agentName(kind: string, taken: Iterable<string>): string {
@@ -140,6 +153,12 @@ export class HerdrActions {
   /** Rename an agent (its name in Herdr and in the sidebar). */
   renameAgent(paneId: string, name: string | null) {
     return this.client.request('agent.rename', { target: paneId, name });
+  }
+
+  /** Split a pane: a new shell next to it in the same Herdr tab. */
+  async splitPane(params: PaneSplitParams): Promise<PaneInfo> {
+    const r = await this.client.request<PaneInfoResult>('pane.split', { focus: false, ...params });
+    return r.pane;
   }
 
   /** Closes one pane in Herdr: its process ends. */

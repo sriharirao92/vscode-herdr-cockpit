@@ -28,6 +28,7 @@ const ROOTS = {
     'PaneTarget',
     'AgentRenameParams',
     'EventsSubscribeParams',
+    'PaneSplitParams',
   ],
 };
 /** `ResponseResult` variants (discriminated by `type`) to emit as `<Pascal>Result` interfaces
@@ -41,6 +42,7 @@ const RESULT_VARIANTS = [
   'worktree_created',
   'worktree_removed',
   'agent_started',
+  'pane_info',
   'ok',
 ];
 

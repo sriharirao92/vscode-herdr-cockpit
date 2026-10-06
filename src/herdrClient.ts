@@ -127,7 +127,9 @@ export class HerdrClient {
 
 /**
  * Lifecycle events that should trigger a refresh of our cached model. These take no parameters.
- * Not `pane.updated`: it fires on every terminal-title change, and agents animate their titles.
+ * Not `pane.updated`: it fires on every terminal-title change (agents animate their titles) and, on herdr
+ * 0.9.3, not on `pane.rename` (which emits no event at all; `tab.rename` emits tab.renamed). Pane renames
+ * made in Herdr are picked up by the safety poll (extension.ts).
  */
 const LIFECYCLE_EVENTS = [
   'workspace.created',
@@ -152,6 +154,7 @@ const LIFECYCLE_EVENTS = [
   'pane.exited',
   'pane.agent_detected',
 ] as const;
+
 
 // Typed against the generated schema: a pane-scoped event here (one that needs a pane_id) fails to compile.
 export const DEFAULT_SUBSCRIPTIONS: readonly EventSubscription[] = LIFECYCLE_EVENTS.map((type) => ({ type }));

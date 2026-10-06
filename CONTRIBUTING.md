@@ -7,6 +7,7 @@ npm install
 npm run compile      # TypeScript -> out/
 npm test             # no editor needed: fake Herdr server, fake herdr/editor binaries, a real temporary git repo
 npm run lint
+npm run test:vscode  # integration test in a real VS Code against a throwaway Herdr session (needs herdr + VS Code)
 npm run package      # -> herdr-hub-<version>.vsix
 ```
 
