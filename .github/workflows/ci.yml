@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run compile
+      - run: npm run lint
+      - name: Test (git identity for the temporary repositories gitTest creates)
+        run: |
+          git config --global user.name ci
+          git config --global user.email ci@example.invalid
+          npm test
+      - name: Package
+        run: npx vsce package --out herdr-hub.vsix

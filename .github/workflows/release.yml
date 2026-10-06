@@ -1,0 +1,51 @@
+name: Release
+
+# Push a tag like v0.1.0 (matching package.json's version) to release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Check the tag matches package.json
+        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - run: npm run compile && npm run lint
+      - name: Test
+        run: |
+          git config --global user.name ci
+          git config --global user.email ci@example.invalid
+          npm test
+      - name: Package
+        run: |
+          npx vsce package --out "herdr-hub-${GITHUB_REF_NAME#v}.vsix"
+          # A stable name too: the Herdr plugin installs releases/latest/download/herdr-hub.vsix.
+          cp "herdr-hub-${GITHUB_REF_NAME#v}.vsix" herdr-hub.vsix
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" herdr-hub.vsix "herdr-hub-${GITHUB_REF_NAME#v}.vsix" --title "Herdr Hub ${GITHUB_REF_NAME}" --notes-file CHANGELOG.md
+      # Each token is visible only to its own step (not to npm ci's install scripts or the tests), and the
+      # step skips itself when the secret isn't set.
+      - name: Publish to the VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then echo "VSCE_PAT not set: skipping"; exit 0; fi
+          npx vsce publish --packagePath herdr-hub.vsix
+      - name: Publish to Open VSX (Cursor, Kiro, Positron)
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then echo "OVSX_PAT not set: skipping"; exit 0; fi
+          npx --yes ovsx@1 publish herdr-hub.vsix

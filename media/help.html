@@ -11,7 +11,7 @@
   <nav class="toc">
     <a href="#top-bar">Header</a><a href="#usage">Usage</a><a href="#needs-you">Needs you</a><a href="#spaces">Spaces</a><a href="#git">Git line</a>
     <a href="#create">Create, rename, close</a><a href="#agents">Agents &amp; colors</a><a href="#shells">Shells</a><a href="#terminals">Terminal tabs</a>
-    <a href="#actions">Actions</a><a href="#elsewhere">Status bar &amp; alerts</a><a href="#follow">Follow mode</a><a href="#offline">When Herdr isn't running</a>
+    <a href="#actions">Actions</a><a href="#elsewhere">Status bar &amp; alerts</a><a href="#follow">Follow mode</a><a href="#plugin">Herdr plugin</a><a href="#offline">When Herdr isn't running</a>
     <a href="#keys">Keyboard</a><a href="#settings">Settings</a><a href="#privacy">Privacy &amp; safety</a><a href="#trouble">Troubleshooting</a>
   </nav>
 </header>
@@ -53,7 +53,7 @@
   </table>
   <p>Further down, <b>Usage</b> and <b>Spaces</b> are section headings: click <b>Usage</b> to fold it, and use the
     <span class="codicon codicon-add"></span> next to <b>Spaces</b> to create a space. Every action is also in the Command
-    Palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>) under <b>Herdr Hub:</b>, for example <b>Herdr Hub: New Space…</b></p>
+    Palette (<!--PALETTE-->) under <b>Herdr Hub:</b>, for example <b>Herdr Hub: New Space…</b></p>
 </section>
 
 <section id="usage">
@@ -287,7 +287,7 @@
     <li><b>Closing a tab only detaches.</b> The agent or shell keeps running in Herdr. Inside the tab, <kbd>ctrl</kbd>+<kbd>b</kbd> then <kbd>q</kbd> also detaches.</li>
     <li>In the hub window, tabs show only their name. Elsewhere VS Code adds the folder name after it; to hide that in every window, set <code>terminal.integrated.tabs.description</code> to <code>${task}</code> in your user settings.</li>
     <li>Clicking a space opens all its panes as tabs, in order: agents (most urgent first), then shells.</li>
-    <li>Switching spaces closes the previous space's tabs (setting <code>herdr.closeTerminalsOnSwitch</code>). Tabs open in the editor area or the bottom panel (<code>herdr.terminalLocation</code>).</li>
+    <li>Switching spaces closes the previous space's tabs (setting <code>herdr.closeTerminalsOnSwitch</code>). Tabs open in the editor area, the editor area split into agents (left) and shells (right), or the bottom panel (<code>herdr.terminalLocation</code>).</li>
   </ul>
 </section>
 
@@ -317,7 +317,21 @@
     To avoid hijacking unrelated windows it only acts in the hub window, or in a window where you've already switched a space from the sidebar.</p>
   <p>The <b>hub window</b> (<span class="codicon codicon-ellipsis"></span> menu → <b>Set Up Hub Window</b>) is a dedicated VS Code window for Herdr. Its first folder never changes, so switching spaces never restarts your extensions. In the hub window, terminal tabs show
     just their name, and VS Code's terminal <b>+</b> creates Herdr tabs (see <a href="#create">Create</a>). The first time a hub window opens, it opens this sidebar for you.</p>
+  <p>Clicking a space in any other window asks first: switching spaces there would make it an untitled workspace (or add folders to your own workspace). <b>Open Hub Window</b> opens that space in the hub window instead; <b>Use This Window</b> switches here, and the window remembers your choice. A window with no folder always uses the hub window.</p>
   <p><button class="btn secondary" data-cmd="setupHub">Set up hub window</button></p>
+</section>
+
+<section id="plugin">
+  <h2>The Herdr plugin: from Herdr's terminal to here</h2>
+  <p>The companion Herdr plugin works from Herdr's side. Run its actions with the keys its setup offers to add, or from a terminal with <code>herdr plugin action invoke sriharirao.herdr-hub.open</code> (or <code>.open-file</code>, <code>.review</code>, <code>.status</code>, <code>.setup</code>):</p>
+  <dl>
+    <dt>Open in editor <kbd>prefix</kbd>+<kbd>shift</kbd>+<kbd>e</kbd></dt><dd>Opens the hub window on the space you're in, with the focused pane's tab in front.</dd>
+    <dt>Open selected file in editor <kbd>prefix</kbd>+<kbd>shift</kbd>+<kbd>o</kbd></dt><dd>Select a location in any pane (<code>src/app.ts:42:7</code>, <code>app.ts(42,7)</code>, <code>app.ts#L42</code>, a Python traceback line) and it opens here at that line.</dd>
+    <dt>Review changes in editor</dt><dd>The focused pane's repository changes as diffs. With <code>review_on_done = true</code> in the plugin's config, this happens by itself when an agent finishes.</dd>
+    <dt>Status</dt><dd>Which editors have Herdr Hub and whether the hub window is connected.</dd>
+  </dl>
+  <p>Links from the plugin always open in the hub window: another window passes them on and brings the hub window up. A link for a different Herdr session asks before switching.</p>
+  <p><button class="btn secondary" data-cmd="installPlugin">Install the Herdr plugin</button></p>
 </section>
 
 <section id="offline">
@@ -390,12 +404,14 @@
 <section id="trouble">
   <h2>Troubleshooting</h2>
   <dl>
+    <dt>Terminal tabs show a folder name after their name</dt><dd>The editor adds the terminal's folder to each tab, and it can't be turned off per terminal. Herdr Hub turns it off for the hub window, and for any saved or untitled workspace you've switched spaces from (reload the window if it was already open). In a window with a single folder it leaves your repository's settings alone: to hide it everywhere, set <code>terminal.integrated.tabs.description</code> to <code>${task}</code> in your user settings.</dd>
+    <dt>Herdr Hub's tab is last in the sidebar (Positron, Kiro)</dt><dd>Editors don't let extensions choose their tab's position. Drag the <b>Herdr Hub</b> tab to where you want it; the editor remembers the order.</dd>
     <dt>Can't find the Herdr Hub sidebar (Cursor and other editors)</dt><dd>Open it from the Command Palette: <b>Herdr Hub: Focus on Spaces &amp; Agents View</b>.
       Cursor shows its activity bar as a row of icons across the top of the sidebar, and icons that don't fit sit behind the <b>⌄</b> arrow at the end of the row.
       Once the sidebar is open, right-click the icon row to keep Herdr Hub visible, or drag it to the other side of the window.</dd>
     <dt>The sidebar says Herdr isn't running, installed or answering</dt><dd>See <a href="#offline">When Herdr isn't running</a>. If you use a named Herdr session or a custom socket, set <code>herdr.socketPath</code> (user settings).</dd>
-    <dt>Clicking a space says "open a folder first"</dt><dd>Spaces are mounted next to the folder the window already has. Open any folder, or set up the hub window.</dd>
-    <dt>A terminal tab won't open</dt><dd>VS Code may not find the <code>herdr</code> binary when launched from the Dock. Set <code>herdr.binaryPath</code> in your <b>user</b> settings (workspace values are ignored).</dd>
+    <dt>Explorer says "Untitled (Workspace)"</dt><dd>A window becomes an untitled workspace when a space's folder is mounted next to the folder it already had. Use the hub window instead (<b>Set Up Hub Window</b>), or save this one with <b>File → Save Workspace As…</b>.</dd>
+    <dt>A terminal tab won't open</dt><dd>VS Code may not find the <code>herdr</code> binary when it was started from the Dock or an app launcher, which don't load your shell's PATH. Set <code>herdr.binaryPath</code> in your <b>user</b> settings (workspace values are ignored).</dd>
     <dt>Agents show up as shells running "zsh (kiro-cli-term)"</dt><dd>Kiro's shell integration wrapped Herdr's pane shells, which hides agents from
       Herdr. It happens when the Herdr server was started without Kiro's terminal around it (older Herdr Hub versions' <b>Start Herdr</b> did this).
       The agents are still running. Stop Herdr (<code>herdr server stop</code>) and click <b>Start Herdr</b> again: panes then start without the wrapper,

@@ -46,7 +46,7 @@ const snapA = snap({
   agents: [agent(paneA1, { name: 'reviewer', agent_status: 'working' }), agent(paneB1, { agent_status: 'blocked' })],
 });
 
-let snapshot = snapA;
+const snapshot = snapA;
 let reads = 0;
 let busyStarts = 2;
 /** Requests the mock received for the create/rename/close methods, in order. */

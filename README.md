@@ -1,40 +1,70 @@
-# Herdr Hub (prototype)
+# Herdr Hub
 
-Herdr spaces and agents inside **one** VS Code window.
+Your [Herdr](https://herdr.dev) spaces, agents and shells in **one** editor window, with the editor's files, diffs and source control alongside.
 
-- **Spaces & Agents sidebar**: live from Herdr's socket (`session.snapshot` + `events.subscribe`). Each space is a card with its branch and changes; agents show a colored status, time in state and a one-line summary of what they last said. A **Needs you** section lists blocked and done agents with a preview of their screen. **Shells** show what is running (`python app.py`, `vi config.yaml`) or the last command and its output, with failures in red. Status-bar counter and badge.
-- **Header buttons**: toggle shell panes, open settings. Right-click a space, agent or shell for more actions.
-- **Switch space** (click it): swaps the space's folder into this window (Explorer, Search and Source Control follow), closes the previous space's attach terminals, and opens every pane of the space as its own tab: agents first (most urgent first), then shells. Set `herdr.autoAttachShells` to `false` to open agents only.
-- **Create from VS Code**: **+** next to "Spaces" makes a new space (a folder, or a new git worktree of an existing space); **+ New tab** in a space starts a shell or an agent (Claude, Codex, Kiro, Cursor, …). In the hub window VS Code's own terminal **+** creates a Herdr tab in the current space, and its dropdown starts agents. Right-click to rename or close in Herdr.
-- **Usage**: plan usage of Claude Code, Codex and Kiro at the top of the sidebar: 5-hour and weekly limit bars with reset countdowns (Codex; Claude after a one-click opt-in), Claude tokens in the current 5-hour block, Kiro credits. Read from each tool's local files.
-- **Agent logos** for Claude, Codex, Kiro, Cursor, Copilot, Gemini, Qwen, Kimi, Devin, Grok, OpenCode, Kilo Code, Antigravity, Amp and more (see `media/THIRD_PARTY_NOTICES.md`).
-- **Pin** (📌): mount a space alongside the current one instead of swapping.
-- **Agent terminals**: `herdr agent attach <pane> --takeover` in native VS Code terminals. Closing one only detaches; the agent keeps running.
-- **Follow mode**: switch spaces in the Herdr TUI (e.g. in your Mac terminal) and this window follows.
-- **Full status**: per-agent state (or custom state label), time in state, agent kind, model, task title, $tokens; per-space branch, uncommitted changes, ahead/behind. Right-click → **Show Raw Herdr Record** for every field Herdr reports.
-- **Review changes**: HEAD ↔ working-tree diffs for the agent's repo; offered automatically when an agent goes `done`.
+Herdr keeps running your agents (Claude Code, Codex, Kiro, Cursor Agent, Copilot, Gemini and more) in its own terminal multiplexer. Herdr Hub is a client of the Herdr server: switching a space mounts its folder and opens every agent and shell as a terminal tab, and the sidebar shows what each one is doing. Closing a tab only detaches; the agent keeps running in Herdr.
 
-## Install
-    code --install-extension herdr-hub-<version>.vsix
+Works in **VS Code, Cursor, Kiro and Positron** on **macOS and Linux**. A community project, not affiliated with Herdr.
 
-Other editors use their own command instead of `code`: `cursor`, `kiro` or `positron`.
-In Cursor, `cursor` isn't on your PATH by default; it's in `Cursor.app/Contents/Resources/app/bin/`.
+## Features
 
-## First run
-1. Make sure the Herdr server is running (`herdr` in any terminal, or "Herdr: Open Full Herdr TUI in Editor").
-2. Run **Herdr: Set up Herdr Hub Window**. It opens a workspace whose first folder is `~/.herdr-hub`.
-   Slot 0 never changes, so switching spaces never restarts extensions.
-   (Any normal window works too; the folder you opened stays in slot 0.)
-3. Click a space in the Herdr sidebar. The hub window opens the sidebar the first time; elsewhere, click the
-   Herdr Hub icon in the activity bar. In Cursor the activity bar is a row of icons across the top of the
-   sidebar, and Herdr Hub may be behind the **⌄** arrow at its end. The Command Palette always works:
-   **Herdr Hub: Focus on Spaces & Agents View**.
+- **Spaces & Agents sidebar**, live from Herdr: each space is a card with its branch and changes; agents show a colored status (working, blocked, done, idle), time in state and a one-line summary of what they last said. **Needs you** lists blocked and done agents with a preview of their screen. **Shells** show what is running, or the last command and its output.
+- **Switch spaces**: click one to swap its folder into the window (Explorer, Search and Source Control follow) and open its agents and shells as tabs, most urgent first. Put agents and shells side by side with `herdr.terminalLocation` = `editorSplit`.
+- **Create from the editor**: new spaces (a folder or a new git worktree), new tabs with a shell or an agent; the terminal **+** creates Herdr tabs in the hub window. Rename and close in Herdr.
+- **Usage**: Claude Code, Codex and Kiro plan limits (5-hour and weekly windows, reset times, Kiro credits) while their agents run.
+- **Review changes**: an agent's diffs, offered when it finishes.
+- **Follow mode**: switch spaces in Herdr's terminal and the hub window follows.
+- **When Herdr isn't running**: says why (not installed, not running, crashed, incompatible), starts it in the background on request, and reconnects when it's back.
 
-## Debugging
-- **Herdr: Show Raw Session Snapshot** shows exactly what Herdr returns. Snapshot types are generated
-  from `herdr api schema --json` (`npm run gen:types`).
-- Output panel → "Herdr Hub" logs connection and follow events.
+## Requirements
 
-## Develop
-    npm install && npm run compile && npm test   # mock-server tests, no VS Code needed
-    # F5 in VS Code with this folder open launches an Extension Development Host
+- Herdr 0.9 (socket protocol 22; tested with 0.9.1), running on the same machine as the extension. A newer protocol shows an "incompatible" screen until Herdr Hub is updated. With Remote-SSH, the extension runs on the server next to Herdr.
+- macOS or Linux.
+
+## Get started
+
+1. Install **Herdr Hub** from the Extensions view (VS Code Marketplace; Open VSX for Cursor, Kiro and Positron), or download the `.vsix` from [Releases](https://github.com/sriharirao92/herdr-hub/releases) and run `code --install-extension herdr-hub.vsix` (or `cursor`, `kiro`, `positron`).
+2. Run Herdr as usual, or click **Start Herdr** in the sidebar.
+3. Run **Herdr Hub: Set Up Hub Window**. The hub window's first folder (`~/.herdr-hub`) never changes, so switching spaces never restarts your extensions.
+4. Click a space.
+
+The **Get started with Herdr Hub** walkthrough covers the same steps (Command Palette: **Welcome: Open Walkthrough…**).
+
+**Can't see the sidebar?** In Cursor the activity bar is a row of icons across the top of the sidebar, and Herdr Hub may be behind the **⌄** arrow at its end. The Command Palette always works: **Herdr Hub: Focus on Spaces & Agents View**.
+
+## The Herdr plugin
+
+Working in Herdr's terminal? The companion plugin jumps from Herdr to the editor:
+
+```bash
+herdr plugin install sriharirao92/herdr-hub/plugin
+```
+
+- **Open in editor**: the space and pane you're on, in the hub window.
+- **Open selected file in editor**: select `src/app.ts:42:7` (or `app.py", line 12`, `file.ts(42,7)`, `file.ts#L42`) in any pane.
+- **Review changes in editor**, **Status**, and **Set up editor** (finds your editors, installs the extension, offers keybindings).
+
+See [plugin/README.md](plugin/README.md).
+
+## Settings
+
+All settings start with `herdr.`; the guide (`?` in the sidebar) lists them. Most used:
+
+| Setting | |
+|---|---|
+| `herdr.terminalLocation` | `editor`, `editorSplit` (agents left, shells right) or `panel` |
+| `herdr.autoAttachShells` | Also open plain shells when switching spaces |
+| `herdr.startServer` | Start Herdr when the hub window opens: `ask`, `always`, `never` |
+| `herdr.binaryPath`, `herdr.socketPath` | A herdr binary or socket (named session) Herdr Hub doesn't find itself |
+
+## Privacy and security
+
+Nothing leaves your machine. Herdr Hub talks to your local Herdr server, runs read-only git in trusted windows, and reads usage from your agents' local files (never credentials). See [SECURITY.md](SECURITY.md).
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). `npm test` needs no editor.
+
+## License
+
+[MIT](LICENSE). Agent logos: see [media/THIRD_PARTY_NOTICES.md](media/THIRD_PARTY_NOTICES.md).

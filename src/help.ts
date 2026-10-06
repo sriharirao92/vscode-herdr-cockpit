@@ -6,7 +6,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 
 /** Commands the page's buttons may run. */
-const ALLOWED = new Set(['openSettings', 'setupHub', 'refresh', 'startServer']);
+const ALLOWED = new Set(['openSettings', 'setupHub', 'refresh', 'startServer', 'installPlugin']);
 
 let current: vscode.WebviewPanel | undefined;
 
@@ -36,7 +36,11 @@ export function showHelp(ctx: vscode.ExtensionContext) {
   const w = panel.webview;
   const uri = (...p: string[]) => w.asWebviewUri(vscode.Uri.joinPath(media, ...p));
   const nonce = crypto.randomBytes(16).toString('base64');
-  const body = fs.readFileSync(vscode.Uri.joinPath(media, 'help.html').fsPath, 'utf8').replace('<!--SETTINGS-->', settingsTable(ctx.extension));
+  const palette = process.platform === 'darwin' ? '<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>' : '<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>';
+  const body = fs
+    .readFileSync(vscode.Uri.joinPath(media, 'help.html').fsPath, 'utf8')
+    .replace('<!--SETTINGS-->', settingsTable(ctx.extension))
+    .replace(/<!--PALETTE-->/g, palette);
   w.html = `<!DOCTYPE html>
 <html lang="en">
 <head>

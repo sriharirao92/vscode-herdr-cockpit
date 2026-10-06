@@ -8,7 +8,7 @@ into **one** VS Code window. Goal: keep Herdr's spaces/agents workflow but get t
 The user runs Herdr in the macOS terminal. Their agents include Claude Code, Codex and Kiro. The extension is a **client of the
 Herdr server**. It never owns agent processes; Herdr does.
 
-Status: working prototype (v0.0.26), installed and tried by the user on macOS against a real Herdr
+Status: working prototype (v0.0.30), installed and tried by the user on macOS against a real Herdr
 server (installed binary: herdr 0.9.1, socket protocol 22; the online docs were at 0.9.3). Confirmed working in real use: sidebar lists real
 spaces/agents, space switching, attach terminals.
 
@@ -50,10 +50,15 @@ Bump `version` in package.json for each vsix you hand to the user.
 | `test/mockTest.ts` | Fake Herdr server. Tests a schema-typed synthetic snapshot, the real fixture `test/fixtures/snapshot-herdr-0.9.1.json`, metadata parsing, errors, subscriptions and `events_lost`. |
 | `test/viewTest.ts` | Shell/agent summaries and view state, using real pane output captured from herdr 0.9.1. |
 | `test/gitTest.ts` | Runs against a real temporary git repo. |
+| `tools.ts` | `findTool(name)`: herdr, git and codex in the usual macOS and Linux install folders (Homebrew, `~/.local/bin`, Linuxbrew, `/usr/bin`, Nix, Snap) before PATH; editors started from the Dock or an app launcher have a minimal PATH. No vscode imports. |
+| `hubFiles.ts` | What the extension shares with the Herdr plugin, under `~/.herdr-hub`: the hub workspace (`ensureHubWorkspace`, never overwrites), `editors/<scheme>.json` (each editor's command line + extension and link version, written on every activation), `status/<scheme>.json` (hub window state, debounced + 30s heartbeat, removed only by its owner pid), `pending-link.json` (hand-off). `parseLink()` validates deep links: `open`/`review` take `space`/`pane` ids (`^[A-Za-z0-9:_-]{1,64}$`), `label`, `session`; `file` takes an absolute `path`, `line`, `col`; anything else, or `v` > `LINK_VERSION`, is refused. No vscode imports. |
+| `plugin/` | The Herdr plugin (`herdr-plugin.toml` + one POSIX `herdr-hub.sh`, no build): actions open / open-file / review / status / setup, popups setup and status, hook `pane.agent_status_changed` (opt-in `review_on_done`). Opens links with the editor's own CLI (`--open-url`). Config: `config.toml` in `herdr plugin config-dir sriharirao.herdr-hub`. |
+| `test/hubTest.ts`, `test/pluginTest.ts` | Links, hub files, tool lookup; the plugin script under `/bin/sh` and `dash` with a fake `herdr` and fake editor CLIs (macOS app bundles and Linux PATH). |
 
 ## Key design decisions (keep unless the user says otherwise)
-- **VS Code extension as a Herdr client, not a Herdr plugin.** An optional Herdr plugin is in the backlog only for the reverse jump.
-- **Hub window:** `Herdr: Set up Herdr Hub Window` creates `~/.herdr-hub/herdr-hub.code-workspace`. Slot 0 is `~/.herdr-hub`, so switching spaces never restarts extensions. The workspace setting `herdr.hubWindow: true` enables follow mode there. In the hub, the extension also sets `terminal.integrated.tabs.description` to `${task}` at workspace scope (once, only if unset) so terminal tabs show just their name; VS Code has no per-terminal option for this. The first time a hub window opens it runs `herdr.spaces.focus` once (workspaceState `herdr.hubViewRevealed`): Cursor's horizontal activity bar hides extension icons behind a ⌄ overflow, so users couldn't find the view.
+- **VS Code extension as a Herdr client, not a Herdr plugin.** The companion Herdr plugin (`plugin/`) only jumps from Herdr to the editor; all the UI lives in the extension.
+- **Hub window:** `Herdr: Set up Herdr Hub Window` creates `~/.herdr-hub/herdr-hub.code-workspace`. Slot 0 is `~/.herdr-hub`, so switching spaces never restarts extensions. The workspace setting `herdr.hubWindow: true` enables follow mode there. In the hub, the extension also sets `terminal.integrated.tabs.description` to `${task}` at workspace scope (once, only if unset) so terminal tabs show just their name; VS Code has no per-terminal option for this. Since v0.0.29 `nameOnlyTabs()` also does this in managed windows that have a workspace file (saved or untitled multi-root), never in single-folder windows (it would write the repo's `.vscode/settings.json`), and not if the user set a global value. Sidebar tab order (e.g. Herdr Hub last in Positron's secondary sidebar) can't be set by an extension: the user drags it. The first time a hub window opens it runs `herdr.spaces.focus` once (workspaceState `herdr.hubViewRevealed`): Cursor's horizontal activity bar hides extension icons behind a ⌄ overflow, so users couldn't find the view.
+- **Spaces belong in the hub window (v0.0.30):** `useThisWindow()` runs before every user-started switch outside the hub: a window without folders goes straight to the hub (pending-link hand-off with the space and pane); otherwise a modal offers Open Hub Window / Use This Window (remembered in workspaceState `herdr.useThisWindow`). Follow-mode switches (`fromHerdr`) skip it. `switchTo` returns false when the switch didn't happen here, so `attachPane` stops.
 - **Follow mode** acts only in a hub window, or after the user has switched a space from VS Code (the `herdr.managedWindow` workspaceState flag). This prevents hijacking unrelated windows.
 - **Switching a space:** mount its folder, reveal it in Explorer, call `workspace.focus` in Herdr, and close the attach terminals of other spaces (`closeTerminalsOnSwitch`). Then attach every pane as its own tab: agents most urgent first (blocked > done > working > idle), then shells in tab order (`autoAttachShells`). VS Code places each new terminal tab after the previous one (editor area and panel alike), so they're opened in that order, then the first is focused.
 - **Events are invalidation signals.** Always re-read with `session.snapshot`; never apply event payloads incrementally. This is what Herdr's docs recommend: on `events_lost`, resubscribe and re-snapshot.
@@ -101,14 +106,14 @@ After upgrading Herdr: `npm run gen:types`, fix compile errors, and save a new `
 2. Status events are subscribed per pane (v0.0.25) but still trigger a full re-snapshot. Could apply their payloads directly; keep the snapshot fallback.
 3. **Prompt agent from VS Code**: on an agent row, open an input box and call `agent.prompt`. Optionally send the current selection or file path as context.
 4. ~~New agent / new worktree space~~ (done: New tab / New space / + button).
-5. A **reverse jump** Herdr plugin (`herdr-plugin.toml`) with an action that opens `vscode://srihari-local.herdr-hub/focus?workspace=<id>`. The extension would need `registerUriHandler`.
+5. ~~Reverse jump Herdr plugin~~ (done: `plugin/`, deep links in `hubFiles.ts`). Ideas: clickable `file:line` once Herdr sends non-URL clicks to link handlers; a status pane that stays open (today: a popup).
 6. On done: auto-open review, and diff against the merge-base instead of HEAD when on a worktree branch.
 7. ~~`pane.read` preview for blocked agents~~ (done in the sidebar).
 8. Support named sessions and remote machines (`herdr --remote`) via the `herdr.socketPath` setting or a session picker.
-9. Bundle with esbuild. Add an ESLint config and CI. Swap the placeholder `repository` URL in package.json for the real one.
+9. ~~ESLint, CI, repository URL~~ (done). No esbuild: there are no runtime dependencies, so `tsc` output is already self-contained.
 
 ## Open-source release (decided 2026-10-05)
-- Name stays **Herdr Hub**, described as a community (unofficial) VS Code client for Herdr. License **MIT**. Publisher **`sriharirao`** (free on Marketplace and Open VSX when checked; not yet created). The current id `srihari-local.herdr-hub` changes at release: uninstall the old id first or both install side by side.
+- Name stays **Herdr Hub**, described as a community (unofficial) VS Code client for Herdr. License **MIT**. Publisher **`sriharirao`** (free on Marketplace and Open VSX when checked; accounts not yet created), set in package.json since v0.0.27: the id is `sriharirao.herdr-hub`; uninstall the old `srihari-local.herdr-hub` or both run side by side.
 - One repo: extension plus the Herdr plugin in a subfolder (`herdr plugin install <owner>/<repo>/<subdir>`).
 - Target editors, from each app's `product.json` on the user's Mac:
 
@@ -120,11 +125,23 @@ After upgrading Herdr: `npm run gen:types`, fix compile errors, and save a new `
   | Cursor 3.23 | `cursor` (app `bin/`, not on PATH by default) | `cursor` | `marketplace.cursorapi.com`, Cursor's proxy that serves Open VSX extensions | 1.128 |
 
   So publish to Marketplace **and** Open VSX. Cursor's `bin/` also ships a `code` script, so never assume `code` means VS Code. Cursor 3.23 activated v0.0.24 and connected to Herdr (per its exthost log).
-- macOS + Linux: no macOS-only paths or commands without a Linux branch.
+- macOS + Linux: no macOS-only paths or commands without a Linux branch. `npm test` passes in Docker (`node:20`, Debian; `/bin/sh` is dash): copy the tracked files in with `COPYFILE_DISABLE=1 tar --no-xattrs` or macOS adds `._*` files that break lint.
+- Editor command lines: every editor accepts `--open-url <url>` (checked in VS Code, Cursor, Kiro, Positron `cli.js`). Kiro and Positron ship only `<app>/Contents/Resources/app/bin/code` (no `kiro`/`positron` there); on Linux the launcher is `<install>/bin/<name>` next to `resources/app`. `editorCli()` handles both.
+- Release: `.github/workflows/release.yml` on a `v<version>` tag: tests, packages, GitHub release with `herdr-hub.vsix` (stable name: the plugin's fallback install downloads `releases/latest/download/herdr-hub.vsix`), then publishes to the Marketplace / Open VSX only if the `VSCE_PAT` / `OVSX_PAT` secrets exist. The publisher accounts still have to be created by the user.
+
+## Herdr plugin facts (verified on herdr 0.9.1 with a probe plugin in an isolated `XDG_CONFIG_HOME`)
+- Plugins are per **user**, in every session (`~/.config/herdr/plugins`). To test without touching the user's Herdr, set `XDG_CONFIG_HOME`/`XDG_STATE_HOME`/`XDG_DATA_HOME` to a temp dir **short enough for the socket** (≤104 chars on macOS: the scratchpad is too long, `$TMPDIR/hbx.XXXX` works), then `herdr plugin link`, `herdr --session <name> server`, `herdr plugin action invoke <plugin>.<action>`, `herdr plugin log list --plugin <id>`.
+- Actions get `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID`, `HERDR_PANE_ID`, `HERDR_SESSION`, `HERDR_SOCKET_PATH`, `HERDR_BIN_PATH`, `HERDR_PLUGIN_{ID,ROOT,CONFIG_DIR,STATE_DIR,ACTION_ID}` and `HERDR_PLUGIN_CONTEXT_JSON` (`workspace_id/label/cwd`, `tab_id/label`, `focused_pane_id/cwd/agent/status`, `selected_text`, `clicked_url`, `invocation_source`, `worktree`). The working directory is the plugin root. PATH is the server's.
+- Event hooks accept `pane.agent_status_changed` **without** a pane id (unlike `events.subscribe`) and fire for every pane: `HERDR_PLUGIN_EVENT_JSON` = `{"event":"pane_agent_status_changed","data":{pane_id, workspace_id, agent_status, agent}}`.
+- Link handlers only see **plain `http(s)` URLs** Herdr detects in pane text. `file:line` text, `file://` text and OSC 8 hyperlinks (even `https`) are not links (`pane.link.resolve` returns no region). Hence "open selected file" instead of clickable paths.
+- `plugin pane open --placement popup --env K=V` works on a headless server; popups get no `HERDR_PANE_ID`, so actions pass ids with `--env`.
+- Default keys taken: `prefix+v` (split), `prefix+e` (scrollback); the user has `prefix+f`, `prefix+shift+f`, `prefix+d`. The plugin offers `prefix+shift+e` / `prefix+shift+o`, only after asking and only if free.
 
 ## Conventions
 - **Security (from a commit review):** git runs only in trusted windows (Workspace Trust is the real boundary; the list below closes known routes but can't be proven complete), with `--no-optional-locks`, `core.fsmonitor=false`, `log.showSignature=false`, `protocol.allow=never` (no lazy fetch in partial clones → no core.sshCommand/ext::), `core.hooksPath=/dev/null`, every repo-defined `filter.<driver>` blanked (`filterOverrides()` fails closed: any config-read error other than exit 1, or an unexpressible driver name → skip git) and `--ignore-submodules=all`: a repo's own `.git/config` can otherwise make `git status`/`log` run programs (fsmonitor, clean filters, gpg.program). gitTest proves each vector stays off. `herdr.binaryPath`/`socketPath` are `machine`-scoped so a repository's `.vscode/settings.json` can't pick the program we launch. The hub is recognised only by its workspace file (`~/.herdr-hub/herdr-hub.code-workspace`), not by a `herdr.hubWindow` workspace setting alone. Keep these when touching git, settings or process launches; never put real paths, hosts, names or ids in tests/fixtures/docs (the repo was scrubbed once).
-- TypeScript strict. Keep `herdrClient.ts` and `model.ts` free of `vscode` imports so `npm test` runs without VS Code.
+- TypeScript strict, `npm run lint` clean. Keep `herdrClient.ts`, `model.ts`, `connection.ts`, `hubFiles.ts`, `tools.ts` free of `vscode` imports so `npm test` runs without VS Code.
+- The plugin stays POSIX `sh` (no bash-isms, no jq/node/python): it must run on any macOS or Linux box with Herdr. Test both shells.
+- Deep links are an attack surface (any web page can open one): only ever select things the user already has; never run commands or change settings from a link without asking.
 - Add a mock-server test for any new socket method.
 - Never write workspace folder index 0.
 - Agent processes belong to Herdr: closing or disposing a VS Code terminal must only detach.

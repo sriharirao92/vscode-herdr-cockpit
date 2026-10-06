@@ -16,18 +16,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { HERDR_PROTOCOL } from './herdrTypes';
+import { findTool } from './tools';
 
 export function resolveBinary(override?: string): string {
   if (override) return override.startsWith('~') ? path.join(os.homedir(), override.slice(1)) : override;
-  // GUI-launched VS Code on macOS often lacks Homebrew in PATH, so probe common spots.
-  const candidates = [
-    '/opt/homebrew/bin/herdr',
-    '/usr/local/bin/herdr',
-    path.join(os.homedir(), '.local/bin/herdr'),
-    path.join(os.homedir(), '.cargo/bin/herdr'),
-    path.join(os.homedir(), '.nix-profile/bin/herdr'),
-  ];
-  return candidates.find((c) => fs.existsSync(c)) ?? 'herdr';
+  return findTool('herdr');
 }
 
 /** The binary exists (an absolute path that is there, or a bare name found on PATH). */

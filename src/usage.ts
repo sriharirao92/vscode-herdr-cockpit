@@ -19,6 +19,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
+import { findTool } from './tools';
 
 export interface UsageWindow {
   /** "5h", "7d", ... */
@@ -106,13 +107,7 @@ async function tailLines(file: string, bytes: number): Promise<string[]> {
 
 /** Where Codex installs itself (a GUI-launched VS Code may not have these on PATH). */
 export function codexBinary(home: string): string {
-  const candidates = [
-    path.join(home, '.local', 'bin', 'codex'),
-    path.join(home, '.codex', 'packages', 'standalone', 'current', 'bin', 'codex'),
-    '/opt/homebrew/bin/codex',
-    '/usr/local/bin/codex',
-  ];
-  return candidates.find((c) => fs.existsSync(c)) ?? 'codex';
+  return findTool('codex', [path.join(home, '.local', 'bin', 'codex'), path.join(home, '.codex', 'packages', 'standalone', 'current', 'bin', 'codex')], home);
 }
 
 /**

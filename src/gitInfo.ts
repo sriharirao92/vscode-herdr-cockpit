@@ -1,7 +1,7 @@
 // Branch, upstream sync and working-tree state per directory, cached briefly.
 // Uses the git CLI directly (fast, works for folders that aren't mounted in VS Code).
 import { execFile } from 'child_process';
-import * as fs from 'fs';
+import { findTool } from './tools';
 
 export interface GitInfo {
   branch?: string;
@@ -24,7 +24,7 @@ export interface GitInfo {
   lastCommit?: { at: number; subject: string };
 }
 
-const GIT = ['/usr/bin/git', '/opt/homebrew/bin/git', '/usr/local/bin/git'].find((g) => fs.existsSync(g)) ?? 'git';
+const GIT = findTool('git', ['/usr/bin/git']);
 const TTL_MS = 8000;
 const cache = new Map<string, { at: number; info?: GitInfo; pending?: Promise<GitInfo | undefined> }>();
 

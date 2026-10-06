@@ -11,8 +11,9 @@ import { buildViewState, paneName, ViewConnection } from './viewState';
 import { agentLogo } from './agentLogos';
 import { gitInfo } from './gitInfo';
 import { isMounted, mountSpace, unmountSpace } from './folders';
-import { AttachTerminals } from './terminals';
-import { backoffDelay, binaryFound, diagnose, Diagnosis, DownReason, herdrEnv, resolveBinary, serverStatus, startServer } from './connection';
+import { AttachTerminals, TerminalLocationSetting } from './terminals';
+import { backoffDelay, binaryFound, diagnose, Diagnosis, DownReason, herdrEnv, resolveBinary, serverStatus, sessionOfSocket, startServer } from './connection';
+import { editorCli, ensureHubWorkspace, hubDir, hubWorkspaceFile, HubStatus, isInsideRoots, LINK_VERSION, LinkRequest, parseLink, removeHubStatus, takePendingLink, writeEditorRecord, writeHubStatus, writePendingLink } from './hubFiles';
 import { HERDR_PROTOCOL } from './herdrTypes';
 import { reviewChanges } from './review';
 import { showHelp } from './help';
@@ -24,6 +25,8 @@ import { setUpClaudeUsage } from './usageSetup';
 
 const MANAGED_KEY = 'herdr.managedWindow';
 const REVEALED_KEY = 'herdr.hubViewRevealed';
+/** The user chose to switch spaces in this (non-hub) window rather than the hub window. */
+const THIS_WINDOW_KEY = 'herdr.useThisWindow';
 
 /** The extension's view of the Herdr server. */
 export type Conn =
@@ -43,6 +46,10 @@ const DOWN_TEXT: Record<DownReason, string> = {
 };
 /** terminal.integrated.defaultProfile.<key> for this OS. */
 const PLATFORM_KEY = process.platform === 'darwin' ? 'osx' : process.platform === 'win32' ? 'windows' : 'linux';
+/** `herdr plugin install` source of the companion plugin (plugin/ in this repository). */
+const PLUGIN_SOURCE = 'sriharirao92/herdr-hub/plugin';
+/** Quote for a POSIX shell. */
+const shellQuote = (s: string) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
 /** Only task terminals get a description; others show just their name. */
 const HUB_TAB_DESCRIPTION = '${task}';
 
@@ -92,7 +99,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   };
   const terms = new AttachTerminals(
     () => resolveBinary(cfg().get<string>('binaryPath')),
-    () => cfg().get<'editor' | 'panel'>('terminalLocation', 'editor'),
+    () => cfg().get<TerminalLocationSetting>('terminalLocation', 'editor'),
     (pane, startingAs) => {
       const tab = model?.spaces.flatMap((s) => s.tabs).find((t) => t.id === pane.tabId);
       const kind = pane.isAgent ? pane.agentKind : startingAs;
@@ -108,6 +115,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   status.show();
 
   let model: Model | undefined;
+  /** Set further down: write the hub window's status file for the Herdr plugin (debounced). */
+  let scheduleHubStatus = () => {};
   let eventsLive = false;
   let sub: Subscription | undefined;
   let lastStatus = new Map<string, AgentStatus | undefined>();
@@ -117,7 +126,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   // The hub is our own ~/.herdr-hub workspace; a repo's settings claiming `herdr.hubWindow` don't make it one
   // (the hub writes terminal settings into its workspace file).
-  const hubFile = path.join(os.homedir(), '.herdr-hub', 'herdr-hub.code-workspace');
+  const hubFile = hubWorkspaceFile();
   const isHubWindow = () => !!cfg().get<boolean>('hubWindow') && vscode.workspace.workspaceFile?.fsPath === hubFile;
   const isManagedWindow = () => isHubWindow() || ctx.workspaceState.get<boolean>(MANAGED_KEY, false);
   // git reads each repo's own config; only run it once the window is trusted (see gitInfo.ts).
@@ -158,7 +167,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         if (!wasConnected) onConnected();
         // Panes came or went: move the live subscription to the new set. (Only a live one: restarting a
         // failed stream is the poll's job, so a stream that keeps failing can't loop through here.)
-        if (sub && paneIdsOf(next).join(' ') !== subscribedPanes) startEvents();
+        if (sub && [...paneIdsOf(next)].sort().join(' ') !== subscribedPanes) startEvents();
       } while (again);
     } catch (e) {
       await onFailure(e);
@@ -338,7 +347,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   let subscribedPanes = '';
   function startEvents() {
     const panes = paneIdsOf(model);
-    const key = panes.join(' ');
+    const key = [...panes].sort().join(' ');
     if (sub && key !== subscribedPanes) {
       sub.dispose(); // dispose() doesn't call onEnd: no "ended" log, no fast polling
       sub = undefined;
@@ -363,6 +372,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   // ---------- sidebar ----------
   function render() {
+    scheduleHubStatus();
     panel.update(
       buildViewState({
         model,
@@ -537,14 +547,49 @@ export function activate(ctx: vscode.ExtensionContext) {
       return false;
     }
     await ctx.workspaceState.update(MANAGED_KEY, true);
+    nameOnlyTabs();
     render();
     return true;
   }
 
-  async function switchTo(space: Space, opts: { fromHerdr?: boolean; pin?: boolean; autoAttach?: boolean } = {}) {
+  /**
+   * Switching spaces outside the hub window turns the window into an untitled workspace (or adds folders to
+   * the user's own workspace). The first time, offer the hub window instead; a window with no folder can't
+   * take spaces, so it goes straight to the hub. True: go ahead here.
+   */
+  async function useThisWindow(space: Space, pane?: Pane): Promise<boolean> {
+    if (isHubWindow() || ctx.workspaceState.get<boolean>(THIS_WINDOW_KEY)) return true;
+    const toHub = async () => {
+      const q = new URLSearchParams({ v: String(LINK_VERSION), space: space.id, label: space.label, ...(pane && { pane: pane.id }) });
+      writePendingLink(scheme, '/open', q.toString());
+      await openHub();
+      return false;
+    };
+    if (!vscode.workspace.workspaceFolders?.length) return toHub();
+    const wsf = vscode.workspace.workspaceFile;
+    const why = !wsf
+      ? 'Switching spaces here makes this window an untitled workspace.'
+      : wsf.scheme === 'untitled'
+        ? 'This window is an untitled workspace.'
+        : `Switching spaces here adds folders to your workspace "${vscode.workspace.name}".`;
+    const pick = await vscode.window.showInformationMessage(
+      `${why} Open the Herdr hub window instead?`,
+      { modal: true, detail: "The hub window's first folder never changes, so switching spaces there never restarts your extensions. This window remembers your choice." },
+      'Open Hub Window',
+      'Use This Window',
+    );
+    if (pick === 'Open Hub Window') return toHub();
+    if (pick !== 'Use This Window') return false;
+    await ctx.workspaceState.update(THIS_WINDOW_KEY, true);
+    return true;
+  }
+
+  /** False when the switch didn't happen in this window (handed to the hub window, or cancelled). */
+  async function switchTo(space: Space, opts: { fromHerdr?: boolean; pin?: boolean; autoAttach?: boolean; pane?: Pane } = {}): Promise<boolean> {
+    if (!opts.fromHerdr && !(await useThisWindow(space, opts.pane))) return false;
     switching = true;
     try {
-      if (!(await ensureMounted(space, !!opts.pin))) return;
+      if (!(await ensureMounted(space, !!opts.pin))) return true;
       if (space.cwd) vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(space.cwd)).then(undefined, () => {});
       if (!opts.fromHerdr) {
         await client.request('workspace.focus', { workspace_id: space.id }).catch((e) => log.appendLine(`workspace.focus: ${e.message}`));
@@ -561,10 +606,11 @@ export function activate(ctx: vscode.ExtensionContext) {
     } finally {
       switching = false;
     }
+    return true;
   }
 
   async function attachPane(space: Space, pane: Pane, startingAs?: string) {
-    if (!terms.has(pane.id) && space.cwd) await switchTo(space, { autoAttach: false });
+    if (!terms.has(pane.id) && space.cwd && !(await switchTo(space, { autoAttach: false, pane }))) return;
     terms.attach(pane, { startingAs });
     if (pane.isAgent) client.request('agent.focus', { target: pane.id }).catch(() => {});
   }
@@ -792,36 +838,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       render();
     }),
     vscode.commands.registerCommand('herdr.setupHub', async () => {
-      const dir = path.join(os.homedir(), '.herdr-hub');
-      fs.mkdirSync(dir, { recursive: true });
-      const readme = path.join(dir, 'README.md');
-      if (!fs.existsSync(readme))
-        fs.writeFileSync(
-          readme,
-          '# Herdr hub\n\nThis folder stays as the first workspace folder so VS Code never restarts extensions when you switch Herdr spaces.\nSpaces are mounted below it as `⬢ <name>` folders.\n',
-        );
-      const wsFile = path.join(dir, 'herdr-hub.code-workspace');
-      if (!fs.existsSync(wsFile))
-        fs.writeFileSync(
-          wsFile,
-          JSON.stringify(
-            {
-              folders: [{ path: '.', name: '· herdr hub' }],
-              settings: {
-                'herdr.hubWindow': true,
-                'files.exclude': { 'herdr-hub.code-workspace': true },
-                // Hub window = editor + Herdr; hide the built-in AI chat here only.
-                'chat.disableAIFeatures': true,
-                'workbench.secondarySideBar.defaultVisibility': 'visible',
-                'terminal.integrated.tabs.description': HUB_TAB_DESCRIPTION,
-                [`terminal.integrated.defaultProfile.${PLATFORM_KEY}`]: SHELL_PROFILE_TITLE,
-              },
-            },
-            null,
-            2,
-          ),
-        );
-      await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(wsFile), { forceReuseWindow: false });
+      await openHub();
+    }),
+    vscode.commands.registerCommand('herdr.installPlugin', () => {
+      // Herdr previews what the plugin runs and asks before installing; the user confirms in this terminal.
+      const t = vscode.window.createTerminal({ name: 'Install Herdr plugin', iconPath: new vscode.ThemeIcon('extensions') });
+      t.show();
+      t.sendText(`${shellQuote(binary())} plugin install ${PLUGIN_SOURCE}`, true);
     }),
     vscode.commands.registerCommand('herdr.dumpSnapshot', async () => {
       try {
@@ -834,10 +857,207 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
   );
 
-  // Hub window: terminal tabs show just their name. VS Code's default tab description adds the cwd
-  // folder ("my-project") and can't be set per terminal, so turn it off for this
-  // workspace only. Set once; a value you choose later is left alone.
-  // Also make "+" create Herdr tabs here: "Herdr Shell" becomes this workspace's default profile.
+  // ---------- hub window, deep links, files for the Herdr plugin (hubFiles.ts) ----------
+  const scheme = vscode.env.uriScheme;
+  const extensionVersion: string = ctx.extension.packageJSON.version;
+
+  /** Create the hub workspace if needed and open it (an editor focuses it if it's already open). */
+  async function openHub(newWindow = true) {
+    const file = ensureHubWorkspace({
+      'herdr.hubWindow': true,
+      'files.exclude': { 'herdr-hub.code-workspace': true },
+      // Hub window = editor + Herdr; hide the built-in AI chat here only.
+      'chat.disableAIFeatures': true,
+      'workbench.secondarySideBar.defaultVisibility': 'visible',
+      'terminal.integrated.tabs.description': HUB_TAB_DESCRIPTION,
+      [`terminal.integrated.defaultProfile.${PLATFORM_KEY}`]: SHELL_PROFILE_TITLE,
+    });
+    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(file), { forceNewWindow: newWindow });
+  }
+
+  /** The Herdr session this window talks to; undefined = the default session. */
+  const currentSession = () => sessionOfSocket(socketPath());
+
+  /**
+   * A link from the Herdr plugin (or anywhere: links are validated in parseLink and can only pick a space,
+   * pane or file). Links act in the hub window; another window hands them over and opens the hub.
+   */
+  async function handleLink(uri: vscode.Uri) {
+    let req: LinkRequest;
+    try {
+      req = parseLink(uri.path, uri.query);
+    } catch (e: any) {
+      vscode.window.showWarningMessage(`Herdr Hub: can't open this link: ${e.message}.`);
+      return;
+    }
+    if (!isHubWindow()) {
+      writePendingLink(scheme, uri.path, uri.query);
+      await openHub();
+      return;
+    }
+    await runLink(req);
+  }
+
+  async function runLink(req: LinkRequest) {
+    log.appendLine(`link: ${req.kind} ${JSON.stringify(req)}`);
+    if (req.session !== undefined && req.session !== currentSession()) {
+      const pick = await vscode.window.showWarningMessage(
+        `This link is for the Herdr session "${req.session}", but Herdr Hub is connected to ${currentSession() ? `"${currentSession()}"` : 'the default session'}.`,
+        `Switch to "${req.session}"`,
+      );
+      if (!pick) return;
+      const base = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'herdr');
+      await cfg().update('socketPath', path.join(base, 'sessions', req.session, 'herdr.sock'), vscode.ConfigurationTarget.Global);
+      await kick();
+    }
+    if (req.kind === 'file') {
+      // Files in your spaces, panes or open folders open directly; anything else asks.
+      const roots = [
+        ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+        ...(model?.spaces ?? []).flatMap((s) => [s.cwd, ...s.tabs.flatMap((t) => t.panes.map((p) => p.cwd))]),
+      ].filter((r): r is string => !!r && r !== '/' && r !== os.homedir());
+      if (!isInsideRoots(req.path, roots)) {
+        const ok = await vscode.window.showWarningMessage(
+          `A link asks to open ${req.path}, which isn't in a Herdr space or an open folder.`,
+          { modal: true },
+          'Open',
+        );
+        if (ok !== 'Open') return;
+      }
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(req.path)).then(undefined, () => undefined);
+      if (!doc) return void vscode.window.showWarningMessage(`Herdr Hub: can't open ${req.path}.`);
+      const pos = new vscode.Position(Math.max(0, (req.line ?? 1) - 1), Math.max(0, (req.col ?? 1) - 1));
+      await vscode.window.showTextDocument(doc, { selection: new vscode.Range(pos, pos), preview: false });
+      return;
+    }
+    if (!isConnected()) await kick();
+    if (!isConnected() && !(await ensureConnected())) return;
+    const hit = req.pane ? paneOf({ paneId: req.pane }) : undefined;
+    const sp = hit?.space ?? model?.spaces.find((s) => s.id === req.space) ?? (req.label ? model?.spaces.find((s) => s.label === req.label) : undefined);
+    vscode.commands.executeCommand('herdr.spaces.focus').then(undefined, () => {});
+    if (!sp) {
+      if (req.space || req.label || req.pane) vscode.window.showWarningMessage(`Herdr Hub: that space or pane isn't in Herdr anymore.`);
+      return;
+    }
+    if (req.kind === 'review') return reviewChanges(hit?.pane.cwd ?? sp.cwd, hit?.pane.label ?? sp.label);
+    await ctx.workspaceState.update(MANAGED_KEY, true);
+    if (terms.spaces()[0] !== sp.id || !isMounted(sp)) await switchTo(sp);
+    if (hit) await attachPane(sp, hit.pane);
+  }
+
+  ctx.subscriptions.push(
+    vscode.window.registerUriHandler({ handleUri: (uri) => void handleLink(uri).catch((e) => log.appendLine(`link failed: ${e?.message ?? e}`)) }),
+  );
+
+  /** A link handed over by another window of this editor. */
+  function takeHandoff() {
+    if (!isHubWindow()) return;
+    const p = takePendingLink(scheme);
+    if (!p) return;
+    try {
+      runLink(parseLink(p.path, p.query)).catch((e) => log.appendLine(`link failed: ${e?.message ?? e}`));
+    } catch {
+      // validated before it was written; a stale or edited file is ignored
+    }
+  }
+  let handoffWatch: fs.FSWatcher | undefined;
+  if (isHubWindow())
+    try {
+      handoffWatch = fs.watch(hubDir(), (_e, name) => {
+        if (name === 'pending-link.json') setTimeout(takeHandoff, 100);
+      });
+    } catch {
+      // no hub folder yet
+    }
+
+  // Tell the Herdr plugin this editor has Herdr Hub, and how to start it from a terminal.
+  try {
+    let applicationName: string | undefined;
+    try {
+      applicationName = JSON.parse(fs.readFileSync(path.join(vscode.env.appRoot, 'product.json'), 'utf8')).applicationName;
+    } catch {
+      // no product.json: fall back to `code`
+    }
+    writeEditorRecord({
+      name: vscode.env.appName,
+      scheme,
+      cli: editorCli(vscode.env.appRoot, applicationName),
+      extensionId: ctx.extension.id,
+      extensionVersion,
+      linkVersion: LINK_VERSION,
+      platform: process.platform,
+      updated: Date.now(),
+    });
+  } catch (e: any) {
+    log.appendLine(`could not write the editor record: ${e?.message ?? e}`);
+  }
+
+  // The hub window's state, for the plugin's status pane: written on change, plus a heartbeat.
+  let lastHubStatus = '';
+  let hubStatusAt = 0;
+  function writeStatusNow() {
+    if (!isHubWindow()) return;
+    const counts = { working: 0, blocked: 0, done: 0, idle: 0 };
+    for (const sp of model?.spaces ?? [])
+      for (const tab of sp.tabs)
+        for (const p of tab.panes) if (p.isAgent && p.status && p.status in counts) counts[p.status as keyof typeof counts]++;
+    const attached = terms.spaces()[0];
+    const s: Omit<HubStatus, 'updated'> = {
+      editor: vscode.env.appName,
+      scheme,
+      pid: process.pid,
+      connected: isConnected(),
+      state: conn.kind === 'down' ? conn.reason : conn.kind,
+      session: currentSession(),
+      space: model?.spaces.find((x) => x.id === attached)?.label,
+      tabs: terms.count(),
+      agents: counts,
+      extensionVersion,
+    };
+    const key = JSON.stringify(s);
+    if (key === lastHubStatus && Date.now() - hubStatusAt < 30_000) return;
+    lastHubStatus = key;
+    hubStatusAt = Date.now();
+    try {
+      writeHubStatus({ ...s, updated: hubStatusAt });
+    } catch {
+      // best effort
+    }
+  }
+  let hubStatusTimer: NodeJS.Timeout | undefined;
+  scheduleHubStatus = () => {
+    clearTimeout(hubStatusTimer);
+    hubStatusTimer = setTimeout(writeStatusNow, 500);
+  };
+  const heartbeat = setInterval(writeStatusNow, 30_000);
+  ctx.subscriptions.push({
+    dispose: () => {
+      clearInterval(heartbeat);
+      clearTimeout(hubStatusTimer);
+      handoffWatch?.close();
+      if (isHubWindow()) removeHubStatus(scheme, process.pid);
+    },
+  });
+
+  /**
+   * Terminal tabs show just their name. The editor's default tab description adds the cwd folder
+   * ("my-project") and can't be set per terminal, so turn it off for this workspace: in the hub, and in any
+   * window you've switched spaces from that is a saved or untitled workspace (the setting then lives in its
+   * workspace file, never in a repository's .vscode/settings.json). Set once; a value you chose is left alone.
+   */
+  function nameOnlyTabs() {
+    const hub = isHubWindow();
+    if (!hub && !(isManagedWindow() && vscode.workspace.workspaceFile)) return;
+    const term = vscode.workspace.getConfiguration('terminal.integrated');
+    const set = term.inspect('tabs.description');
+    if (set?.workspaceValue !== undefined || (!hub && set?.globalValue !== undefined)) return;
+    term.update('tabs.description', HUB_TAB_DESCRIPTION, vscode.ConfigurationTarget.Workspace).then(undefined, (e) =>
+      log.appendLine(`could not set terminal.integrated.tabs.description: ${e?.message ?? e}`),
+    );
+  }
+  nameOnlyTabs();
+
+  // Hub window: make "+" create Herdr tabs here: "Herdr Shell" becomes this workspace's default profile.
   // VS Code only applies a workspace default profile in a trusted workspace.
   if (isHubWindow()) {
     const term = vscode.workspace.getConfiguration('terminal.integrated');
@@ -847,7 +1067,6 @@ export function activate(ctx: vscode.ExtensionContext) {
         log.appendLine(`could not set terminal.integrated.${key}: ${e?.message ?? e}`),
       );
     };
-    once('tabs.description', HUB_TAB_DESCRIPTION);
     once(`defaultProfile.${PLATFORM_KEY}`, SHELL_PROFILE_TITLE);
     if (!vscode.workspace.isTrusted) log.appendLine('hub workspace is not trusted: VS Code ignores its default terminal profile, so "+" opens local shells');
     // Open the sidebar the first time this hub window opens. Editors with a horizontal activity bar (Cursor) hide
@@ -863,6 +1082,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     startEvents();
     schedulePoll();
     maybeAutoStart();
+    takeHandoff();
   });
 }
 

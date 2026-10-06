@@ -1,13 +1,22 @@
 {
   "name": "herdr-hub",
   "displayName": "Herdr Hub",
-  "description": "Herdr spaces and agents inside one VS Code window: switch spaces, attach agents as editor tabs, review agent changes.",
-  "version": "0.0.26",
-  "publisher": "srihari-local",
+  "description": "Community client for Herdr: your Herdr spaces, agents and shells in one VS Code window. Switch spaces, open agents as terminal tabs, review their changes. Works in VS Code, Cursor, Kiro and Positron.",
+  "version": "0.0.30",
+  "publisher": "sriharirao",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#121826",
+    "theme": "dark"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/sriharirao92/herdr-hub.git"
+  },
+  "homepage": "https://github.com/sriharirao92/herdr-hub#readme",
+  "bugs": {
+    "url": "https://github.com/sriharirao92/herdr-hub/issues"
   },
   "engines": {
     "vscode": "^1.90.0"
@@ -15,9 +24,21 @@
   "categories": [
     "Other"
   ],
+  "keywords": [
+    "herdr",
+    "agents",
+    "ai",
+    "terminal",
+    "multiplexer",
+    "claude code",
+    "codex",
+    "kiro",
+    "worktree"
+  ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onUri"
   ],
   "contributes": {
     "viewsContainers": {
@@ -177,6 +198,11 @@
       {
         "command": "herdr.openInstallDocs",
         "title": "Install Herdr",
+        "category": "Herdr Hub"
+      },
+      {
+        "command": "herdr.installPlugin",
+        "title": "Install the Herdr Plugin",
         "category": "Herdr Hub"
       }
     ],
@@ -344,10 +370,16 @@
           "type": "string",
           "enum": [
             "editor",
+            "editorSplit",
             "panel"
           ],
           "default": "editor",
-          "description": "Where attached agent terminals open."
+          "enumDescriptions": [
+            "Editor area, as tabs in the active group.",
+            "Editor area, agents in the left group and shells in the right one.",
+            "The terminal panel."
+          ],
+          "description": "Where attached agent and shell terminals open."
         },
         "herdr.closeTerminalsOnSwitch": {
           "type": "boolean",
@@ -457,7 +489,82 @@
           "icon": "hubot"
         }
       ]
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "getStarted",
+        "title": "Get started with Herdr Hub",
+        "description": "Bring your Herdr spaces, agents and shells into this window.",
+        "steps": [
+          {
+            "id": "start",
+            "title": "Connect to Herdr",
+            "description": "The sidebar connects to your running Herdr server.\n[Start Herdr](command:herdr.startServer)",
+            "media": {
+              "markdown": "media/walkthrough/start.md"
+            },
+            "completionEvents": [
+              "onContext:herdr.connected"
+            ]
+          },
+          {
+            "id": "hub",
+            "title": "Open the hub window",
+            "description": "A dedicated window whose first folder never changes, so switching spaces never restarts extensions.\n[Set Up Hub Window](command:herdr.setupHub)",
+            "media": {
+              "markdown": "media/walkthrough/hub.md"
+            },
+            "completionEvents": [
+              "onCommand:herdr.setupHub"
+            ]
+          },
+          {
+            "id": "sidebar",
+            "title": "Find the sidebar",
+            "description": "Spaces, agents and shells, live from Herdr.\n[Show the Sidebar](command:herdr.spaces.focus)",
+            "media": {
+              "markdown": "media/walkthrough/sidebar.md"
+            },
+            "completionEvents": [
+              "onView:herdr.spaces"
+            ]
+          },
+          {
+            "id": "plugin",
+            "title": "Install the Herdr plugin",
+            "description": "Jump from Herdr in your terminal to this editor, and open files from any pane.\n[Install Plugin](command:herdr.installPlugin)",
+            "media": {
+              "markdown": "media/walkthrough/plugin.md"
+            },
+            "completionEvents": [
+              "onCommand:herdr.installPlugin"
+            ]
+          },
+          {
+            "id": "usage",
+            "title": "See your plan limits",
+            "description": "Claude Code, Codex and Kiro usage in the sidebar.\n[Show Plan Limits](command:herdr.setupClaudeUsage)",
+            "media": {
+              "markdown": "media/walkthrough/usage.md"
+            },
+            "completionEvents": [
+              "onCommand:herdr.setupClaudeUsage"
+            ]
+          },
+          {
+            "id": "guide",
+            "title": "Read the guide",
+            "description": "What every color, icon and button means.\n[Open the Guide](command:herdr.openHelp)",
+            "media": {
+              "markdown": "media/walkthrough/guide.md"
+            },
+            "completionEvents": [
+              "onCommand:herdr.openHelp"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p .",
@@ -466,17 +573,21 @@
     "gen:icons": "node scripts/gen-agent-icons.mjs",
     "codicons": "node scripts/copy-codicons.mjs",
     "pretest": "tsc -p .",
-    "test": "node out/test/mockTest.js && node out/test/viewTest.js && node out/test/usageTest.js && node out/test/connectionTest.js && node out/test/gitTest.js",
-    "package": "npm run codicons && tsc -p . && vsce package --allow-missing-repository --skip-license",
-    "install-local": "npm run package && code --install-extension herdr-hub-$npm_package_version.vsix --force"
+    "test": "node out/test/mockTest.js && node out/test/viewTest.js && node out/test/usageTest.js && node out/test/connectionTest.js && node out/test/hubTest.js && node out/test/pluginTest.js && node out/test/gitTest.js",
+    "package": "npm run codicons && tsc -p . && vsce package",
+    "install-local": "npm run package && code --install-extension herdr-hub-$npm_package_version.vsix --force",
+    "lint": "eslint --no-warn-ignored src media/*.js scripts"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@lobehub/icons-static-svg": "^1.95.1",
     "@types/node": "^20.0.0",
     "@types/vscode": "~1.90.0",
     "@vscode/codicons": "^0.0.46-24",
     "@vscode/vsce": "^3.0.0",
-    "typescript": "^5.4.0"
+    "eslint": "^9.39.5",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.71.1"
   },
   "capabilities": {
     "untrustedWorkspaces": {
@@ -486,5 +597,8 @@
         "herdr.hubWindow"
       ]
     }
-  }
+  },
+  "extensionKind": [
+    "workspace"
+  ]
 }

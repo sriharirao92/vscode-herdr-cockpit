@@ -458,7 +458,10 @@
       const all = /** @type {HTMLElement[]} */ ([...app.querySelectorAll('[data-nav]')].filter((n) => /** @type {HTMLElement} */ (n).offsetParent));
       const i = all.indexOf(/** @type {HTMLElement} */ (el.closest('[data-nav]')));
       const next = all[Math.max(0, Math.min(all.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
-      if (next) (e.preventDefault(), next.focus());
+      if (next) {
+        e.preventDefault();
+        next.focus();
+      }
     } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && el.matches('.row[data-pane]')) {
       const id = el.dataset.pane;
       if (id && !el.closest('.attention')) {

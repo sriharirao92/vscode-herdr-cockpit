@@ -13,6 +13,9 @@ interface Entry {
 }
 
 /** How a pane's terminal tab looks: same name as its row in the sidebar, agent logo as the icon. */
+/** herdr.terminalLocation */
+export type TerminalLocationSetting = 'editor' | 'editorSplit' | 'panel';
+
 export interface TerminalLook {
   name: string;
   iconPath: vscode.TerminalOptions['iconPath'];
@@ -24,7 +27,7 @@ export class AttachTerminals implements vscode.Disposable {
 
   constructor(
     private binary: () => string,
-    private location: () => 'editor' | 'panel',
+    private location: () => TerminalLocationSetting,
     /** startingAs: agent kind being started in a pane that is still a plain shell. */
     private look: (pane: Pane, startingAs?: string) => TerminalLook,
     /** Called whenever the set of attached panes changes. */
@@ -43,6 +46,11 @@ export class AttachTerminals implements vscode.Disposable {
   has(paneId: string) {
     const e = this.byPane.get(paneId);
     return !!e && e.term.exitStatus === undefined;
+  }
+
+  /** Live attach tabs. */
+  count(): number {
+    return [...this.byPane.values()].filter((e) => e.term.exitStatus === undefined).length;
   }
 
   /** Spaces that have attach terminals open (live or not), e.g. to reopen them after Herdr restarts. */
@@ -80,10 +88,15 @@ export class AttachTerminals implements vscode.Disposable {
       vscode.window.showWarningMessage(`Herdr: pane ${pane.id} has no terminal id to attach to.`);
       return;
     }
+    // editorSplit: agents in the first editor group, shells in the second (VS Code creates it when needed).
+    const where = this.location();
     const location =
-      this.location() === 'editor'
-        ? { viewColumn: vscode.ViewColumn.Active, preserveFocus: !!opts.preserveFocus }
-        : vscode.TerminalLocation.Panel;
+      where === 'panel'
+        ? vscode.TerminalLocation.Panel
+        : {
+            viewColumn: where === 'editorSplit' ? (pane.isAgent ? vscode.ViewColumn.One : vscode.ViewColumn.Two) : vscode.ViewColumn.Active,
+            preserveFocus: !!opts.preserveFocus,
+          };
     const { name, iconPath } = this.look(pane, opts.startingAs);
     const term = vscode.window.createTerminal({
       name,
