@@ -66,6 +66,10 @@ async function steps(): Promise<void> {
   await until('connected to Herdr', () => hubStatus().connected === true);
   step('connected');
 
+  // 0. The Welcome page (open in a new window) is closed when a space opens.
+  await vscode.commands.executeCommand('workbench.action.openWalkthrough');
+  await until('the Welcome page', () => vscode.window.tabGroups.all.some((g) => g.tabs.some((t) => t.label === 'Welcome')));
+
   // 1. Switching to a space opens its pane as a built-in tab.
   await vscode.commands.executeCommand('herdr.switchSpace', { spaceId: S1 });
   try {
@@ -78,7 +82,8 @@ async function steps(): Promise<void> {
   }
   const first = ours()[0];
   assert.strictEqual(vscode.window.terminals.length, 1, 'no other terminals');
-  step('switch space: built-in tab opened');
+  await until('the Welcome page closed', () => !vscode.window.tabGroups.all.some((g) => g.tabs.some((t) => t.label === 'Welcome')), 5000);
+  step('switch space: built-in tab opened, Welcome page closed');
 
   // 2. The editor group's "+" (default profile "Herdr Shell") creates a Herdr tab and a built-in tab, tracked.
   first.show();
@@ -136,10 +141,10 @@ async function steps(): Promise<void> {
   assert.ok(vscode.window.tabGroups.all.length > groups, 'beside it, in a new editor group');
   step('Split Terminal split the pane in Herdr');
 
-  // 4. Closing the tab yourself (its X = close the editor) closes the idle shell in Herdr.
-  plus.show();
-  await sleep(300);
-  await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  // 4. Closing the tab yourself (its X: close that exact tab) closes the idle shell in Herdr.
+  const plusTab = vscode.window.tabGroups.all.flatMap((g) => g.tabs).find((t) => t.input instanceof vscode.TabInputTerminal && t.label === 'logs here');
+  assert.ok(plusTab, 'the tab is in the editor area');
+  await vscode.window.tabGroups.close(plusTab);
   await until('the tab closed', () => !ours().includes(plus));
   assert.strictEqual(plus.exitStatus?.reason, vscode.TerminalExitReason.User, 'closed by the user');
   await until('the pane closed in Herdr', () => panesOf(S1).length === 2 && !panesOf(S1).includes(plusPane));

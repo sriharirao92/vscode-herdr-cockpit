@@ -2,7 +2,7 @@
   "name": "herdr-hub",
   "displayName": "Herdr Hub",
   "description": "Community client for Herdr: your Herdr spaces, agents and shells in one VS Code window. Switch spaces, open agents as terminal tabs, review their changes. Works in VS Code, Cursor, Kiro and Positron.",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "publisher": "sriharirao",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -360,6 +360,21 @@
             "Never start Herdr automatically (the sidebar still offers a Start Herdr button)."
           ],
           "description": "Whether the Herdr Hub window starts the Herdr server (in the background) when it isn't running."
+        },
+        "herdr.offerHubOnStartup": {
+          "type": "string",
+          "enum": [
+            "emptyWindows",
+            "allWindows",
+            "never"
+          ],
+          "default": "emptyWindows",
+          "enumDescriptions": [
+            "Ask in windows opened without a folder (a new window, or the editor's first launch).",
+            "Ask in every window that isn't the hub (the hub then opens in a new window).",
+            "Never ask."
+          ],
+          "description": "When a window opens, offer to open Herdr Hub (only when Herdr is installed and no hub window is open)."
         },
         "herdr.followMode": {
           "type": "boolean",

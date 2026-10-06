@@ -13,7 +13,7 @@ import { gitInfo } from './gitInfo';
 import { isMounted, mountSpace, unmountSpace } from './folders';
 import { AttachTerminals, TerminalLocationSetting } from './terminals';
 import { backoffDelay, binaryFound, diagnose, Diagnosis, DownReason, herdrEnv, resolveBinary, serverStatus, sessionOfSocket, startServer } from './connection';
-import { editorCli, ensureHubWorkspace, hubDir, hubWorkspaceFile, HubStatus, isInsideRoots, LINK_VERSION, LinkRequest, parseLink, removeHubStatus, takePendingLink, writeEditorRecord, writeHubStatus, writePendingLink } from './hubFiles';
+import { editorCli, ensureHubWorkspace, hubDir, hubOpen, hubWorkspaceFile, HubStatus, isInsideRoots, OfferHubSetting, shouldOfferHub, LINK_VERSION, LinkRequest, parseLink, removeHubStatus, takePendingLink, writeEditorRecord, writeHubStatus, writePendingLink } from './hubFiles';
 import { HERDR_PROTOCOL } from './herdrTypes';
 import { reviewChanges } from './review';
 import { showHelp } from './help';
@@ -656,11 +656,21 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   /** False when the switch didn't happen in this window (handed to the hub window, or cancelled). */
+  /**
+   * The editor's Welcome / walkthrough page is in the way once a space is open: close it. The tab API shows
+   * it as a tab without an input (like other built-in editors), so it's recognized by its label.
+   */
+  function closeWelcome() {
+    const welcome = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t.input === undefined && /^(Welcome|Get(ting)? Started)\b/.test(t.label));
+    if (welcome.length) vscode.window.tabGroups.close(welcome).then(undefined, () => undefined);
+  }
+
   async function switchTo(space: Space, opts: { fromHerdr?: boolean; pin?: boolean; autoAttach?: boolean; pane?: Pane } = {}): Promise<boolean> {
     if (!opts.fromHerdr && !(await useThisWindow(space, opts.pane))) return false;
     switching = true;
     try {
       if (!(await ensureMounted(space, !!opts.pin))) return true;
+      closeWelcome();
       if (space.cwd) vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(space.cwd)).then(undefined, () => {});
       if (!opts.fromHerdr) {
         await client.request('workspace.focus', { workspace_id: space.id }).catch((e) => log.appendLine(`workspace.focus: ${e.message}`));
@@ -943,6 +953,8 @@ export function activate(ctx: vscode.ExtensionContext) {
       'workbench.secondarySideBar.defaultVisibility': 'visible',
       'terminal.integrated.tabs.description': HUB_TAB_DESCRIPTION,
       [`terminal.integrated.defaultProfile.${PLATFORM_KEY}`]: SHELL_PROFILE_TITLE,
+      // The hub opens on your spaces, not the editor's Welcome page.
+      'workbench.startupEditor': 'none',
     });
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(file), { forceNewWindow: newWindow });
   }
@@ -1144,6 +1156,11 @@ export function activate(ctx: vscode.ExtensionContext) {
       );
     };
     once(`defaultProfile.${PLATFORM_KEY}`, SHELL_PROFILE_TITLE);
+    // No Welcome page when the hub window opens (a value you set is left alone).
+    const wb = vscode.workspace.getConfiguration('workbench');
+    const startup = wb.inspect('startupEditor');
+    if (startup?.workspaceValue === undefined && startup?.globalValue === undefined)
+      wb.update('startupEditor', 'none', vscode.ConfigurationTarget.Workspace).then(undefined, (e) => log.appendLine(`could not set workbench.startupEditor: ${e?.message ?? e}`));
     if (!vscode.workspace.isTrusted) log.appendLine('hub workspace is not trusted: VS Code ignores its default terminal profile, so "+" opens local shells');
     // Open the sidebar the first time this hub window opens. Editors with a horizontal activity bar (Cursor) hide
     // extension icons behind an overflow menu, so new users can't find it. Once only: after that, wherever the
@@ -1159,7 +1176,33 @@ export function activate(ctx: vscode.ExtensionContext) {
     schedulePoll();
     maybeAutoStart();
     takeHandoff();
+    void maybeOfferHub();
   });
+
+  /**
+   * A window just opened without a folder (a new window, or the editor's first launch): offer to make it the
+   * hub, so you don't have to find the sidebar or run Set Up Hub Window (herdr.offerHubOnStartup).
+   */
+  async function maybeOfferHub() {
+    const hasFolder = !!vscode.workspace.workspaceFolders?.length || !!vscode.workspace.workspaceFile;
+    const offer = shouldOfferHub({
+      mode: cfg().get<OfferHubSetting>('offerHubOnStartup', 'emptyWindows'),
+      isHub: isHubWindow(),
+      hasFolder,
+      herdrInstalled: binaryFound(binary()),
+      hubOpenElsewhere: hubOpen(scheme),
+    });
+    if (!offer) return;
+    const pick = await vscode.window.showInformationMessage(
+      'Working with agents? Open Herdr Hub here to see your Herdr spaces, agents and shells.',
+      'Open Herdr Hub',
+      'Not Now',
+      "Don't Ask Again",
+    );
+    // An empty window becomes the hub; one with your project keeps it and the hub opens in a new window.
+    if (pick === 'Open Herdr Hub') await openHub(hasFolder);
+    else if (pick === "Don't Ask Again") await cfg().update('offerHubOnStartup', 'never', vscode.ConfigurationTarget.Global);
+  }
 }
 
 export function deactivate() {}

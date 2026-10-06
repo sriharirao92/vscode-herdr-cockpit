@@ -123,6 +123,30 @@ export function writeHubStatus(s: HubStatus, home?: string) {
   if (SCHEME.test(s.scheme)) writeJson(statusFile(s.scheme, home), s);
 }
 
+/**
+ * A hub window of this editor is open right now: its status file is fresh (heartbeat every 30s) and its
+ * extension host is alive.
+ */
+export function hubOpen(scheme: string, home?: string, now = Date.now()): boolean {
+  if (!SCHEME.test(scheme)) return false;
+  const s = readJson(statusFile(scheme, home));
+  if (typeof s?.pid !== 'number' || typeof s?.updated !== 'number' || now - s.updated > 90_000) return false;
+  try {
+    process.kill(s.pid, 0);
+    return true;
+  } catch (e: any) {
+    return e?.code === 'EPERM'; // alive, owned by someone else
+  }
+}
+
+export type OfferHubSetting = 'emptyWindows' | 'allWindows' | 'never';
+
+/** Whether to ask "Open Herdr Hub here?" when a window opens (herdr.offerHubOnStartup). */
+export function shouldOfferHub(w: { mode: OfferHubSetting; isHub: boolean; hasFolder: boolean; herdrInstalled: boolean; hubOpenElsewhere: boolean }): boolean {
+  if (w.mode === 'never' || w.isHub || !w.herdrInstalled || w.hubOpenElsewhere) return false;
+  return w.mode === 'allWindows' || !w.hasFolder;
+}
+
 /** Remove this process's status file (a newer hub window of the same editor may have replaced it: keep that). */
 export function removeHubStatus(scheme: string, pid: number, home?: string) {
   if (!SCHEME.test(scheme)) return;

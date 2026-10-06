@@ -2,6 +2,11 @@
 
 Herdr Hub (the editor extension) and the Herdr plugin (`plugin/`) are released together from this repository.
 
+## Unreleased
+
+- A window opened without a folder (a new window, or the editor's first launch) offers **Open Herdr Hub**, which turns it into the hub window (`herdr.offerHubOnStartup`: `emptyWindows`, `allWindows`, `never`). It stays quiet when Herdr isn't installed or a hub window is already open.
+- Opening a space closes the editor's Welcome page, and the hub window opens without one (`workbench.startupEditor` = `none` for the hub workspace, unless you set it).
+
 ## 0.1.0 (2026-10-06)
 
 First public release. Tested with Herdr 0.9.3 on macOS: in VS Code by hand and with an automated real-editor test, in Positron by hand, and started in Cursor. Kiro installs it but hasn't been tried by hand yet. Unit tests run on macOS and Linux.

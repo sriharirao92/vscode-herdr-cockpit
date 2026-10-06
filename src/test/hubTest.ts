@@ -12,6 +12,8 @@ import {
   parseLink,
   readEditorRecords,
   removeHubStatus,
+  hubOpen,
+  shouldOfferHub,
   takePendingLink,
   writeEditorRecord,
   writeHubStatus,
@@ -94,6 +96,18 @@ removeHubStatus('cursor', 222, home);
 assert.ok(fs.existsSync(stFile), "another window's status is kept");
 removeHubStatus('cursor', 111, home);
 assert.ok(!fs.existsSync(stFile), 'own status removed');
+writeHubStatus({ ...st, pid: process.pid, updated: Date.now() }, home);
+assert.strictEqual(hubOpen('cursor', home), true, 'fresh status, live process');
+assert.strictEqual(hubOpen('cursor', home, Date.now() + 120_000), false, 'stale heartbeat');
+writeHubStatus({ ...st, pid: 999999, updated: Date.now() }, home);
+assert.strictEqual(hubOpen('cursor', home), false, 'dead process');
+assert.strictEqual(hubOpen('vscode', home), false, 'no status file');
+const offer = (o: Partial<Parameters<typeof shouldOfferHub>[0]>) =>
+  shouldOfferHub({ mode: 'emptyWindows', isHub: false, hasFolder: false, herdrInstalled: true, hubOpenElsewhere: false, ...o });
+assert.deepStrictEqual(
+  [offer({}), offer({ hasFolder: true }), offer({ hasFolder: true, mode: 'allWindows' }), offer({ mode: 'never' }), offer({ isHub: true }), offer({ herdrInstalled: false }), offer({ hubOpenElsewhere: true })],
+  [true, false, true, false, false, false, false],
+);
 console.log('✓ hub status written and removed only by its owner');
 
 // ---------- hand-off ----------
