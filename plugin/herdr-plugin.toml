@@ -6,7 +6,7 @@
 # Everything is one POSIX shell script (herdr-cockpit.sh): no build step, no runtime to install.
 id = "sriharirao.vscode-herdr-cockpit"
 name = "Herdr Cockpit for VS Code"
-version = "0.2.0"
+version = "0.2.1"
 # Tested with herdr 0.9.1 and 0.9.3 (protocol 22), the protocol the Herdr Cockpit extension speaks.
 min_herdr_version = "0.9.1"
 platforms = ["macos", "linux"]

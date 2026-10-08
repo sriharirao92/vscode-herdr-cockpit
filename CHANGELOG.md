@@ -3,6 +3,11 @@
 Herdr Cockpit (the editor extension) and its Herdr plugin (`plugin/`) are released together from this repository.
 Versions up to 0.1.2 were published as **Herdr Hub** (`sriharirao.herdr-hub`).
 
+## 0.2.1 (2026-10-08)
+
+- README and store page: images of moving from Herdr's terminal to the same space in VS Code with the plugin, the Cockpit window, and the sidebar (from a demo session; `docs/screenshots/render.sh` rebuilds them).
+- Release workflow: Open VSX Trusted Publishing when the repository variable `OVSX_TRUSTED_PUBLISHING` is `true` (see RELEASING.md).
+
 ## 0.2.0 (2026-10-08)
 
 - **Renamed to Herdr Cockpit.** Another Herdr plugin is already called "Herdr Hub", so the extension is now **Herdr Cockpit** (`sriharirao.herdr-cockpit`, a new Marketplace listing: uninstall Herdr Hub and install Herdr Cockpit) and the Herdr plugin is **Herdr Cockpit for VS Code** (`sriharirao.vscode-herdr-cockpit`; install with `herdr plugin install sriharirao92/vscode-herdr-cockpit/plugin`). The repository is `sriharirao92/vscode-herdr-cockpit`. The "hub window" is now the **Cockpit window**.
