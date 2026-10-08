@@ -16,7 +16,7 @@ jobs:
       contents: write # the GitHub release
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -64,7 +64,7 @@ jobs:
       - uses: actions/download-artifact@v7
         with:
           name: vsix
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
       # Pinned to a commit: this step can sign in as the publishing app. Update the SHA and comment together.
@@ -84,7 +84,7 @@ jobs:
       - uses: actions/download-artifact@v7
         with:
           name: vsix
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
       - name: Publish to Open VSX
