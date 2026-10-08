@@ -34,7 +34,7 @@ jobs:
           npx vsce package --out "herdr-cockpit-${GITHUB_REF_NAME#v}.vsix"
           # A stable name too: the Herdr plugin installs releases/latest/download/herdr-cockpit.vsix.
           cp "herdr-cockpit-${GITHUB_REF_NAME#v}.vsix" herdr-cockpit.vsix
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: vsix
           path: '*.vsix'
