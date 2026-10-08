@@ -36,9 +36,24 @@ repository's `marketplace` environment. No secret is stored anywhere, and no Azu
 
 The next tag publishes to the Marketplace. To publish an existing tag, re-run its Release workflow.
 
-## Open VSX (Cursor, Kiro, Positron)
+## Open VSX (Cursor, Kiro, Positron): Trusted Publishing (one-time setup)
 
-Open VSX keeps using an access token. Sign in at https://open-vsx.org with GitHub, link an Eclipse account
-and sign the Publisher Agreement (profile page), create a token under **Settings → Access Tokens**, claim the
-namespace once with `npx ovsx create-namespace sriharirao -p <token>`, and add the token as the repository
-secret `OVSX_PAT`.
+Open VSX's Trusted Publishing works like the Marketplace setup above: the workflow trades its GitHub OIDC token
+for a 5-minute token that can publish only this extension, so nothing is stored. It needs the namespace to have an
+owner and the extension to exist, so the first version is published by hand.
+
+1. **Account.** Sign in at https://open-vsx.org with GitHub, link an Eclipse account and sign the Publisher
+   Agreement (on the profile page). The `sriharirao` namespace already exists.
+2. **First version, by hand.** **Settings → Access Tokens → Generate new token**, then in your own terminal:
+   `npx ovsx publish herdr-cockpit-0.2.0.vsix -p <token>` (the `.vsix` is on the GitHub release). Afterwards
+   delete the token (**Delete all**): it isn't needed again.
+3. **Claim the namespace.** Open a "claim namespace ownership" issue at
+   https://github.com/EclipseFdn/open-vsx.org/issues/new/choose for `sriharirao`, linking this repository.
+   Until an owner is set, the namespace (and the extension) show as unverified. Ownership is required for step 4.
+4. **Trusted publisher.** Once you're the owner: **Settings → Trusted Publishers**, namespace `sriharirao`,
+   extension `herdr-cockpit`, provider **GitHub Actions**: owner `sriharirao92`, repository
+   `vscode-herdr-cockpit`, workflow filename `release.yml`, no environment.
+5. **Turn it on.** In this repository: **Settings → Secrets and variables → Actions → Variables → New repository
+   variable** `OVSX_TRUSTED_PUBLISHING` = `true`.
+
+Without step 5 the workflow falls back to an `OVSX_PAT` secret if there is one, and otherwise skips Open VSX.

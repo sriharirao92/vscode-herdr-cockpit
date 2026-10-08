@@ -76,10 +76,15 @@ jobs:
       - name: Publish to the VS Code Marketplace
         run: npx --yes @vscode/vsce@3.9.2 publish --azure-credential --skip-duplicate --packagePath herdr-cockpit.vsix
 
-  # Open VSX (Cursor, Kiro, Positron). The token is visible only to this step.
+  # Open VSX (Cursor, Kiro, Positron). With the repository variable OVSX_TRUSTED_PUBLISHING = true it uses Open VSX
+  # Trusted Publishing: this workflow's GitHub OIDC token is exchanged for a 5-minute token for this one extension,
+  # so nothing is stored. Otherwise the OVSX_PAT secret, if set. See RELEASING.md.
   openvsx:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -89,7 +94,14 @@ jobs:
           node-version: 20
       - name: Publish to Open VSX
         env:
+          TRUSTED: ${{ vars.OVSX_TRUSTED_PUBLISHING }}
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         run: |
-          if [ -z "$OVSX_PAT" ]; then echo "OVSX_PAT not set: skipping"; exit 0; fi
-          npx --yes ovsx@1 publish herdr-cockpit.vsix --skip-duplicate
+          if [ "$TRUSTED" = "true" ]; then
+            # A token would take precedence over trusted publishing: leave it out.
+            env -u OVSX_PAT npx --yes ovsx@1.2.0 publish herdr-cockpit.vsix --trusted-publishing --skip-duplicate
+          elif [ -n "$OVSX_PAT" ]; then
+            npx --yes ovsx@1.2.0 publish herdr-cockpit.vsix --skip-duplicate
+          else
+            echo "Open VSX publishing isn't set up (see RELEASING.md): skipping"
+          fi
