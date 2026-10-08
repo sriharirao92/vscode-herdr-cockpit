@@ -7,6 +7,7 @@ import {
   editorCli,
   ensureHubWorkspace,
   hubWorkspaceFile,
+  legacyHubWorkspaceFile,
   LINK_VERSION,
   isInsideRoots,
   parseLink,
@@ -38,7 +39,7 @@ rejects('/file', 'path=/a.ts&line=-1', /invalid line/);
 rejects('/file', `path=${encodeURIComponent('//host/share/x')}`, /local/);
 rejects('/file', `path=${encodeURIComponent('\\\\host\\share\\x')}`, /local/);
 rejects('/run', 'cmd=ls', /unknown link "run"/);
-rejects('/open', `v=${LINK_VERSION + 1}`, /newer Herdr Hub/);
+rejects('/open', `v=${LINK_VERSION + 1}`, /newer Herdr Cockpit/);
 assert.strictEqual(parseLink('/file', `path=${encodeURIComponent('/repo/../etc/x')}`).kind === 'file' && (parseLink('/file', `path=${encodeURIComponent('/repo/../etc/x')}`) as any).path, '/etc/x', 'normalized');
 console.log('✓ links parsed and validated (ids, session, absolute file paths, unknown actions, newer versions)');
 
@@ -65,7 +66,9 @@ assert.deepStrictEqual(JSON.parse(fs.readFileSync(ws, 'utf8')).settings, { 'herd
 fs.writeFileSync(ws, '{"folders":[],"settings":{"mine":1}}');
 ensureHubWorkspace({ 'herdr.hubWindow': true }, home);
 assert.strictEqual(JSON.parse(fs.readFileSync(ws, 'utf8')).settings.mine, 1, 'never overwrites an existing hub workspace');
-console.log('✓ hub workspace created once, never overwritten');
+assert.strictEqual(hubWorkspaceFile('/h'), '/h/.herdr-cockpit/herdr-cockpit.code-workspace');
+assert.strictEqual(legacyHubWorkspaceFile('/h'), '/h/.herdr-hub/herdr-hub.code-workspace', 'the pre-rename hub workspace');
+console.log('✓ hub workspace created once, never overwritten; pre-rename path kept');
 
 // ---------- editor records + CLI lookup ----------
 const mac = path.join(home, 'Cursor.app', 'Contents', 'Resources', 'app');
@@ -82,7 +85,7 @@ assert.strictEqual(editorCli(path.join(linux, 'resources', 'app'), 'code'), path
 assert.strictEqual(editorCli(path.join(home, 'nowhere'), 'code'), undefined);
 assert.strictEqual(editorCli(mac, '../../evil'), path.join(mac, 'bin', 'code'), 'odd names ignored');
 
-const rec = { name: 'Cursor', scheme: 'cursor', cli: '/x/cursor', extensionId: 'sriharirao.herdr-hub', extensionVersion: '1.0.0', linkVersion: 1, platform: 'darwin', updated: 1 };
+const rec = { name: 'Cursor', scheme: 'cursor', cli: '/x/cursor', extensionId: 'sriharirao.herdr-cockpit', extensionVersion: '1.0.0', linkVersion: 1, platform: 'darwin', updated: 1 };
 writeEditorRecord(rec, home);
 writeEditorRecord({ ...rec, scheme: '../evil' }, home);
 assert.deepStrictEqual(readEditorRecords(home), [rec], 'one valid record; a bad scheme is never written');
@@ -91,7 +94,7 @@ console.log('✓ editor command line found (macOS and Linux layouts), editor rec
 // ---------- hub status ----------
 const st = { editor: 'Cursor', scheme: 'cursor', pid: 111, connected: true, state: 'connected', tabs: 2, agents: { working: 1, blocked: 0, done: 0, idle: 1 }, extensionVersion: '1', updated: 1 };
 writeHubStatus(st, home);
-const stFile = path.join(home, '.herdr-hub', 'status', 'cursor.json');
+const stFile = path.join(home, '.herdr-cockpit', 'status', 'cursor.json');
 removeHubStatus('cursor', 222, home);
 assert.ok(fs.existsSync(stFile), "another window's status is kept");
 removeHubStatus('cursor', 111, home);

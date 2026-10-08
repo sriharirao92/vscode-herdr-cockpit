@@ -20,6 +20,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import { findTool } from './tools';
+import { LEGACY_NAME } from './hubFiles';
 
 export interface UsageWindow {
   /** "5h", "7d", ... */
@@ -54,7 +55,9 @@ export interface ProviderUsage {
 }
 
 /** Where our Claude Code status line saves its input (see claudeStatusLineScript). */
-export const claudeCaptureFile = (home: string) => path.join(home, '.herdr-hub', 'claude-usage.json');
+export const claudeCaptureFile = (home: string) => path.join(home, '.herdr-cockpit', 'claude-usage.json');
+/** Where a status line installed before the rename (Herdr Hub) saves it: still read, so that setup keeps working. */
+export const legacyClaudeCaptureFile = (home: string) => path.join(home, `.${LEGACY_NAME}`, 'claude-usage.json');
 
 const HOUR = 3600_000;
 const exists = (p: string) => fs.promises.access(p).then(() => true, () => false);
@@ -159,7 +162,7 @@ export function codexLiveUsage(bin: string, timeoutMs = 10_000): Promise<Provide
         }
       }
     });
-    send({ id: 1, method: 'initialize', params: { clientInfo: { name: 'herdr-hub', title: 'Herdr Hub', version: '1' } } });
+    send({ id: 1, method: 'initialize', params: { clientInfo: { name: 'herdr-cockpit', title: 'Herdr Cockpit', version: '1' } } });
   });
 }
 
@@ -210,8 +213,9 @@ export async function claudeUsage(home: string, now = Date.now()): Promise<Provi
   if (!(await exists(path.join(home, '.claude')))) return;
   const usage: ProviderUsage = { id: 'claude', name: 'Claude Code', windows: [] };
 
-  // Plan limits, if the opt-in status line has saved them.
-  const capture = claudeCaptureFile(home);
+  // Plan limits, if the opt-in status line has saved them (the newer of the current and pre-rename captures).
+  const captures = await Promise.all([claudeCaptureFile(home), legacyClaudeCaptureFile(home)].map(async (f) => ({ f, at: await mtime(f) })));
+  const capture = captures.filter((c) => c.at > 0).sort((a, b) => b.at - a.at)[0]?.f ?? claudeCaptureFile(home);
   try {
     const rl = JSON.parse(await fs.promises.readFile(capture, 'utf8'))?.rate_limits ?? {};
     usage.windows = [window('5h', rl.five_hour?.used_percentage, rl.five_hour?.resets_at, now), window('7d', rl.seven_day?.used_percentage, rl.seven_day?.resets_at, now)].filter(
@@ -331,7 +335,7 @@ export async function readUsage(home: string, now = Date.now(), opts: UsageOptio
  */
 export function claudeStatusLineScript(captureFile: string): string {
   return `#!/bin/sh
-# Installed by Herdr Hub (VS Code). Claude Code shares plan usage (rate_limits) only with a status
+# Installed by Herdr Cockpit (VS Code). Claude Code shares plan usage (rate_limits) only with a status
 # line command: this saves it for the Herdr sidebar and prints it. Remove "statusLine" from
 # ~/.claude/settings.json to turn it off.
 f="${captureFile}"

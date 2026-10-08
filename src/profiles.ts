@@ -4,7 +4,7 @@
 // tab: VS Code puts an editor-area split in a new group beside the current one (verified in VS Code 1.140's
 // source: a split with a contributed default profile opens it at SIDE_GROUP). A split becomes a Herdr pane
 // split (same Herdr tab); anything else a new Herdr tab. Panel splits (splitActiveTerminal) can't be told
-// apart, so they make new tabs. In the hub window "Herdr Shell" is the default profile, so a plain "+" does
+// apart, so they make new tabs. In the Cockpit window "Herdr Shell" is the default profile, so a plain "+" does
 // this; elsewhere the profiles are in the dropdown.
 import * as vscode from 'vscode';
 import * as path from 'path';

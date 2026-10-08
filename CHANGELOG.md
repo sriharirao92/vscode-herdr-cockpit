@@ -1,6 +1,14 @@
 # Changelog
 
-Herdr Hub (the editor extension) and the Herdr plugin (`plugin/`) are released together from this repository.
+Herdr Cockpit (the editor extension) and its Herdr plugin (`plugin/`) are released together from this repository.
+Versions up to 0.1.2 were published as **Herdr Hub** (`sriharirao.herdr-hub`).
+
+## Unreleased: 0.2.0
+
+- **Renamed to Herdr Cockpit.** Another Herdr plugin is already called "Herdr Hub", so the extension is now **Herdr Cockpit** (`sriharirao.herdr-cockpit`, a new Marketplace listing: uninstall Herdr Hub and install Herdr Cockpit) and the Herdr plugin is **Herdr Cockpit for VS Code** (`sriharirao.vscode-herdr-cockpit`; install with `herdr plugin install sriharirao92/vscode-herdr-cockpit/plugin`). The repository is `sriharirao92/vscode-herdr-cockpit`. The "hub window" is now the **Cockpit window**.
+- Settings (`herdr.*`) carry over. Files move to `~/.herdr-cockpit`; a Cockpit window set up before the rename (`~/.herdr-hub`) is still recognized, and the Claude plan-limits status line set up before it keeps working.
+- README, store and plugin descriptions lead with what it's for: one VS Code window instead of several Herdr plugins and windows, every VS Code extension next to your agents, and agent usage across Claude Code, Codex and Kiro.
+- Release workflow: publishes to the Marketplace with Microsoft Entra ID (personal access tokens stop working on 2026-12-01; see RELEASING.md), re-runs are safe, and actions are pinned and kept current by Dependabot.
 
 ## 0.1.2 (2026-10-06)
 

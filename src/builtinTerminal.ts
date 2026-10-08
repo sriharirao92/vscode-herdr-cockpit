@@ -142,7 +142,7 @@ export class HerdrPty implements vscode.Pseudoterminal {
     this.ended = true;
     const why = error ? `couldn't stream this pane: ${error}` : reason === 'detached' ? 'detached' : `the stream ended (${reason ?? 'closed'})`;
     this.deps.log(`built-in terminal ${this.paneId ?? '(new pane)'}: ${why}`);
-    this.writer.fire(`${POSTLUDE}\r\n\x1b[2m[Herdr Hub] ${why}. Close this tab, or click the pane in the sidebar to open it again.\x1b[0m\r\n`);
+    this.writer.fire(`${POSTLUDE}\r\n\x1b[2m[Herdr Cockpit] ${why}. Close this tab, or click the pane in the sidebar to open it again.\x1b[0m\r\n`);
     this.deps.onEnded();
   }
 }

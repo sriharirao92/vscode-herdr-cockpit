@@ -1,4 +1,4 @@
-// The Herdr plugin (plugin/herdr-hub.sh) against a fake `herdr` and fake editor command lines that record
+// The Herdr plugin (plugin/herdr-cockpit.sh) against a fake `herdr` and fake editor command lines that record
 // their arguments. Runs the script with /bin/sh (and dash when installed), so it stays POSIX.
 import * as assert from 'assert';
 import { execFileSync, spawnSync } from 'child_process';
@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const script = path.join(__dirname, '..', '..', 'plugin', 'herdr-hub.sh');
+const script = path.join(__dirname, '..', '..', 'plugin', 'herdr-cockpit.sh');
 // /bin/sh is bash (macOS) or dash (Debian, Ubuntu); also run dash wherever it's installed.
 const shells = [...new Map(['/bin/sh', '/bin/dash', '/usr/bin/dash'].filter((s) => fs.existsSync(s)).map((s) => [fs.realpathSync(s), s])).values()];
 
@@ -30,7 +30,7 @@ function sandbox() {
     fs.writeFileSync(ext, extensions);
     fs.writeFileSync(
       cli,
-      `#!/bin/sh\nprintf '${name} %s\\n' "$*" >> ${JSON.stringify(log)}\ncase "$1" in --list-extensions) cat ${JSON.stringify(ext)};; --install-extension) echo sriharirao.herdr-hub >> ${JSON.stringify(ext)};; esac\n`,
+      `#!/bin/sh\nprintf '${name} %s\\n' "$*" >> ${JSON.stringify(log)}\ncase "$1" in --list-extensions) cat ${JSON.stringify(ext)};; --install-extension) echo sriharirao.herdr-cockpit >> ${JSON.stringify(ext)};; esac\n`,
       { mode: 0o755 },
     );
     return cli;
@@ -38,16 +38,16 @@ function sandbox() {
   const record = (scheme: string, cli: string, updated: number, linkVersion = 1) =>
     fs.writeFileSync(
       path.join(hub, 'editors', `${scheme}.json`),
-      JSON.stringify({ name: scheme, scheme, cli, extensionId: 'sriharirao.herdr-hub', extensionVersion: '0.1.0', linkVersion, platform: 'darwin', updated }, null, 2),
+      JSON.stringify({ name: scheme, scheme, cli, extensionId: 'sriharirao.herdr-cockpit', extensionVersion: '0.1.0', linkVersion, platform: 'darwin', updated }, null, 2),
     );
   const env = (extra: Record<string, string> = {}) => ({
     PATH: '/usr/bin:/bin',
     HOME: dir,
     HERDR_BIN_PATH: herdr,
-    HERDR_HUB_DIR: hub,
+    HERDR_COCKPIT_DIR: hub,
     HERDR_PLUGIN_CONFIG_DIR: path.join(dir, 'config'),
     XDG_CONFIG_HOME: path.join(dir, 'xdg'),
-    HERDR_HUB_APP_DIRS: path.join(dir, 'Applications'),
+    HERDR_COCKPIT_APP_DIRS: path.join(dir, 'Applications'),
     ...extra,
   });
   const run = (shell: string, args: string[], extra: Record<string, string> = {}, input = '') =>
@@ -83,8 +83,8 @@ function sandbox() {
     console.log(`✓ ${tag} file locations parsed`);
 
     // open: the most recently used editor gets the link, with the space, pane, label and session
-    const vscode = t.editor('code', 'sriharirao.herdr-hub\n');
-    const cursor = t.editor('cursor', 'sriharirao.herdr-hub\n');
+    const vscode = t.editor('code', 'sriharirao.herdr-cockpit\n');
+    const cursor = t.editor('cursor', 'sriharirao.herdr-cockpit\n');
     t.record('vscode', vscode, 1000);
     t.record('cursor', cursor, 2000);
     let r = t.run(sh, ['open'], {
@@ -96,7 +96,7 @@ function sandbox() {
     });
     assert.strictEqual(r.status, 0, r.stderr);
     let log = await t.calls(/cursor --open-url/);
-    assert.match(log, /^cursor --open-url cursor:\/\/sriharirao\.herdr-hub\/open\?v=1&space=w1&pane=w1%3Ap2&label=my%20api%20%26%20%22web%22&session=work$/m);
+    assert.match(log, /^cursor --open-url cursor:\/\/sriharirao\.herdr-cockpit\/open\?v=1&space=w1&pane=w1%3Ap2&label=my%20api%20%26%20%22web%22&session=work$/m);
     const url = new URL(/--open-url (\S+)/.exec(log)![1]);
     assert.strictEqual(url.searchParams.get('label'), 'my api & "web"', 'label round-trips');
     t.reset();
@@ -110,7 +110,7 @@ function sandbox() {
     fs.writeFileSync(path.join(t.dir, 'config', 'config.toml'), '# mine\neditor = "vscode"   # chosen\n');
     t.run(sh, ['review'], { HERDR_WORKSPACE_ID: 'w3', HERDR_PANE_ID: 'w3:p1' });
     log = await t.calls(/code --open-url/);
-    assert.match(log, /^code --open-url vscode:\/\/sriharirao\.herdr-hub\/review\?v=1&space=w3&pane=w3%3Ap1$/m);
+    assert.match(log, /^code --open-url vscode:\/\/sriharirao\.herdr-cockpit\/review\?v=1&space=w3&pane=w3%3Ap1$/m);
     console.log(`✓ ${tag} config.toml picks the editor; review link`);
 
     // open-file: relative paths resolve against the pane's live folder
@@ -128,7 +128,7 @@ function sandbox() {
     t.reset();
     t.run(sh, ['open-file'], { HERDR_PANE_ID: 'w1:p1', FAKE_FG_CWD: proj, HERDR_PLUGIN_CONTEXT_JSON: JSON.stringify({ selected_text: 'missing.ts:3' }) });
     log = await t.calls(/notification/);
-    assert.match(log, /herdr notification show Herdr Hub --body No such file: .*missing\.ts/);
+    assert.match(log, /herdr notification show Herdr Cockpit --body No such file: .*missing\.ts/);
     assert.doesNotMatch(log, /--open-url/);
     t.reset();
     t.run(sh, ['open-file'], { HERDR_PLUGIN_CONTEXT_JSON: '{}' });
@@ -141,7 +141,7 @@ function sandbox() {
     t.record('cursor', cursor, 3000, 0);
     t.run(sh, ['open'], { HERDR_WORKSPACE_ID: 'w1' });
     log = await t.calls(/notification/);
-    assert.match(log, /Update the Herdr Hub extension in Cursor/);
+    assert.match(log, /Update the Herdr Cockpit extension in Cursor/);
     assert.doesNotMatch(log, /--open-url/);
     console.log(`✓ ${tag} old extension: asks for an update instead of sending a link it can't read`);
 
@@ -157,7 +157,7 @@ function sandbox() {
     t.run(sh, ['on-status'], { HERDR_PLUGIN_EVENT_JSON: ev('done') });
     log = await t.calls(/open-url/);
     assert.strictEqual(log.match(/open-url/g)?.length, 1);
-    assert.match(log, /cursor --open-url cursor:\/\/sriharirao\.herdr-hub\/review\?v=1&space=w2&pane=w2%3Ap1/);
+    assert.match(log, /cursor --open-url cursor:\/\/sriharirao\.herdr-cockpit\/review\?v=1&space=w2&pane=w2%3Ap1/);
     console.log(`✓ ${tag} on-status: review when an agent is done, only when enabled`);
 
     // no editor known: open opens the setup popup, carrying what to do after
@@ -166,7 +166,7 @@ function sandbox() {
     fs.rmSync(path.join(t.dir, 'config'), { recursive: true });
     t.run(sh, ['open'], { HERDR_WORKSPACE_ID: 'w1', HERDR_PANE_ID: 'w1:p1' });
     log = await t.calls(/plugin pane open/);
-    assert.match(log, /herdr plugin pane open --plugin sriharirao\.herdr-hub --entrypoint setup --placement popup --focus --env HUB_PANE=w1:p1 --env HUB_SPACE=w1 --env HUB_AFTER=open/);
+    assert.match(log, /herdr plugin pane open --plugin sriharirao\.vscode-herdr-cockpit --entrypoint setup --placement popup --focus --env HUB_PANE=w1:p1 --env HUB_SPACE=w1 --env HUB_AFTER=open/);
     console.log(`✓ ${tag} no editor yet: opens setup, then continues`);
 
     // setup (macOS layout): finds app bundles, installs the extension, saves the choice, binds keys, then opens
@@ -179,7 +179,7 @@ function sandbox() {
         fs.writeFileSync(ext, extensions);
         fs.writeFileSync(
           path.join(bin, cli),
-          `#!/bin/sh\nprintf '${cli} %s\\n' "$*" >> ${JSON.stringify(path.join(t.dir, 'calls.log'))}\ncase "$1" in --list-extensions) cat ${JSON.stringify(ext)};; --install-extension) echo sriharirao.herdr-hub >> ${JSON.stringify(ext)};; esac\n`,
+          `#!/bin/sh\nprintf '${cli} %s\\n' "$*" >> ${JSON.stringify(path.join(t.dir, 'calls.log'))}\ncase "$1" in --list-extensions) cat ${JSON.stringify(ext)};; --install-extension) echo sriharirao.herdr-cockpit >> ${JSON.stringify(ext)};; esac\n`,
           { mode: 0o755 },
         );
       };
@@ -194,12 +194,12 @@ function sandbox() {
       assert.match(r.stdout, /prefix\+shift\+o is already used/);
       assert.match(fs.readFileSync(path.join(t.dir, 'config', 'config.toml'), 'utf8'), /^editor = "kiro"$/m);
       const herdrCfg = fs.readFileSync(path.join(t.dir, 'xdg', 'herdr', 'config.toml'), 'utf8');
-      assert.match(herdrCfg, /key = "prefix\+shift\+e"\ntype = "plugin_action"\ncommand = "sriharirao\.herdr-hub\.open"/);
-      assert.doesNotMatch(herdrCfg, /herdr-hub\.open-file/);
+      assert.match(herdrCfg, /key = "prefix\+shift\+e"\ntype = "plugin_action"\ncommand = "sriharirao\.vscode-herdr-cockpit\.open"/);
+      assert.doesNotMatch(herdrCfg, /vscode-herdr-cockpit\.open-file/);
       log = await t.calls(/open-url/);
-      assert.match(log, /code --install-extension sriharirao\.herdr-hub/);
+      assert.match(log, /code --install-extension sriharirao\.herdr-cockpit/);
       assert.match(log, /herdr server reload-config/);
-      assert.match(log, /code --open-url kiro:\/\/sriharirao\.herdr-hub\/open\?v=1&space=w4&pane=w4%3Ap1/);
+      assert.match(log, /code --open-url kiro:\/\/sriharirao\.herdr-cockpit\/open\?v=1&space=w4&pane=w4%3Ap1/);
       console.log(`✓ ${tag} setup: finds app bundles (Kiro's bin/code), installs, saves the editor, binds a free key, then opens`);
     }
 
@@ -209,19 +209,19 @@ function sandbox() {
       const bin = path.join(t.dir, 'linux-bin');
       fs.mkdirSync(bin, { recursive: true });
       for (const c of ['code', 'cursor'])
-        fs.writeFileSync(path.join(bin, c), `#!/bin/sh\nprintf '${c} %s\\n' "$*" >> ${JSON.stringify(path.join(t.dir, 'calls.log'))}\ncase "$1" in --list-extensions) echo sriharirao.herdr-hub;; esac\n`, { mode: 0o755 });
+        fs.writeFileSync(path.join(bin, c), `#!/bin/sh\nprintf '${c} %s\\n' "$*" >> ${JSON.stringify(path.join(t.dir, 'calls.log'))}\ncase "$1" in --list-extensions) echo sriharirao.herdr-cockpit;; esac\n`, { mode: 0o755 });
       r = t.run(sh, ['setup'], { PATH: `${bin}:/usr/bin:/bin`, HUB_AFTER: 'open', HUB_SPACE: 'w5' }, '2\nn\nn\n\n');
       assert.strictEqual(r.status, 0, r.stderr);
       assert.match(r.stdout, /1\) VS Code\n {2}2\) Cursor\n/);
-      assert.match(r.stdout, /Cursor has Herdr Hub/);
+      assert.match(r.stdout, /Cursor has Herdr Cockpit/);
       assert.match(fs.readFileSync(path.join(t.dir, 'config', 'config.toml'), 'utf8'), /^editor = "cursor"$/m);
-      assert.match(await t.calls(/open-url/), /cursor --open-url cursor:\/\/sriharirao\.herdr-hub\/open\?v=1&space=w5/);
+      assert.match(await t.calls(/open-url/), /cursor --open-url cursor:\/\/sriharirao\.herdr-cockpit\/open\?v=1&space=w5/);
       console.log(`✓ ${tag} setup (Linux): editors on PATH, extension already there, then opens`);
     }
 
-    // status: reads the hub window's file
+    // status: reads the Cockpit window's file
     const st = sandbox();
-    const cli = st.editor('cursor', 'sriharirao.herdr-hub\n');
+    const cli = st.editor('cursor', 'sriharirao.herdr-cockpit\n');
     st.record('cursor', cli, 1);
     fs.mkdirSync(path.join(st.hub, 'status'), { recursive: true });
     fs.writeFileSync(
@@ -229,9 +229,9 @@ function sandbox() {
       JSON.stringify({ editor: 'Cursor', scheme: 'cursor', pid: process.pid, connected: true, state: 'connected', space: 'api', tabs: 3, agents: { working: 1, blocked: 2, done: 0, idle: 4 }, extensionVersion: '0.1.0', updated: Date.now() }, null, 2),
     );
     r = st.run(sh, ['status'], {}, '\n');
-    assert.match(r.stdout, /hub window: connected, space "api", 3 tabs open\n {4}agents: 1 working, 2 blocked, 0 done, 4 idle/);
+    assert.match(r.stdout, /Cockpit window: connected, space "api", 3 tabs open\n {4}agents: 1 working, 2 blocked, 0 done, 4 idle/);
     fs.writeFileSync(path.join(st.hub, 'status', 'cursor.json'), JSON.stringify({ pid: 999999, connected: true, updated: Date.now() }, null, 2));
-    assert.match(st.run(sh, ['status'], {}, '\n').stdout, /hub window: not open/, 'dead process');
+    assert.match(st.run(sh, ['status'], {}, '\n').stdout, /Cockpit window: not open/, 'dead process');
     console.log(`✓ ${tag} status popup`);
 
     fs.rmSync(t.dir, { recursive: true, force: true });
@@ -240,7 +240,7 @@ function sandbox() {
   // The manifest parses as TOML Herdr accepts is checked by `herdr plugin link` (see CLAUDE.md); here, at least
   // every command points at the script's real subcommands.
   const manifest = fs.readFileSync(path.join(__dirname, '..', '..', 'plugin', 'herdr-plugin.toml'), 'utf8');
-  for (const m of manifest.matchAll(/"herdr-hub\.sh\\?"?,? ?"?([a-z-]+)/g)) assert.match(fs.readFileSync(script, 'utf8'), new RegExp(`^${m[1]}\\)`, 'm'), `subcommand ${m[1]}`);
+  for (const m of manifest.matchAll(/"herdr-cockpit\.sh\\?"?,? ?"?([a-z-]+)/g)) assert.match(fs.readFileSync(script, 'utf8'), new RegExp(`^${m[1]}\\)`, 'm'), `subcommand ${m[1]}`);
   execFileSync('/bin/sh', ['-n', script]);
   console.log('\nplugin tests passed');
 })().catch((e) => {

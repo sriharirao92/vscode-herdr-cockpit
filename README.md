@@ -1,8 +1,15 @@
-# Herdr Hub
+# Herdr Cockpit
 
-Your [Herdr](https://herdr.dev) spaces, agents and shells in **one** editor window, with the editor's files, diffs and source control alongside.
+Run your [Herdr](https://herdr.dev) agents and do everything around them in **one VS Code window**.
 
-Herdr keeps running your agents (Claude Code, Codex, Kiro, Cursor Agent, Copilot, Gemini and more) in its own terminal multiplexer. Herdr Hub is a client of the Herdr server: switching a space mounts its folder and opens every agent and shell as a terminal tab, and the sidebar shows what each one is doing. Closing a tab only detaches; the agent keeps running in Herdr.
+Herdr keeps your coding agents (Claude Code, Codex, Kiro, Cursor Agent, Copilot, Gemini and more) running in its terminal multiplexer. Herdr Cockpit brings its spaces, agents and shells into VS Code, so the editor around them is the real one.
+
+## Why Herdr Cockpit
+
+- **One window instead of a stack of plugins and windows.** No need to add separate Herdr plugins for a file explorer, a web UI or a git reviewer, or to juggle a terminal and several VS Code windows. Switch a space and its folder, files, Source Control, diffs and every agent and shell (as terminal tabs) are right there.
+- **Everything VS Code can do, next to your agents.** Your extensions, language servers, debuggers, notebooks, Markdown preview, image and PDF viewers, and side-by-side diffs work on the files your agents are changing.
+- **Agent usage in one place.** Plan limits for Claude Code, Codex and Kiro side by side: 5-hour and weekly windows with reset times, tokens in the current session, and Kiro credits.
+- **Terminal tabs that behave like Herdr.** Drag to select and copy, scroll Herdr's scrollback, and keep tabs and Herdr in sync: **+** and **Split** create panes, renames go both ways, and closing a tab closes it in Herdr (it asks first for agents).
 
 Works in **VS Code, Cursor, Kiro and Positron** on **macOS and Linux**. A community project, not affiliated with Herdr.
 
@@ -10,37 +17,37 @@ Works in **VS Code, Cursor, Kiro and Positron** on **macOS and Linux**. A commun
 
 - **Spaces & Agents sidebar**, live from Herdr: each space is a card with its branch and changes; agents show a colored status (working, blocked, done, idle), time in state and a one-line summary of what they last said. **Needs you** lists blocked and done agents with a preview of their screen. **Shells** show what is running, or the last command and its output.
 - **Switch spaces**: click one to swap its folder into the window (Explorer, Search and Source Control follow) and open its agents and shells as tabs, most urgent first. Put agents and shells side by side with `herdr.terminalLocation` = `editorSplit`.
-- **Create from the editor**: new spaces (a folder or a new git worktree), new tabs with a shell or an agent; the terminal **+** creates Herdr tabs in the hub window. Rename and close in Herdr.
+- **Create from the editor**: new spaces (a folder or a new git worktree), new tabs with a shell or an agent; the terminal **+** creates Herdr tabs in the Cockpit window. Rename and close in Herdr.
 - **Usage**: Claude Code, Codex and Kiro plan limits (5-hour and weekly windows, reset times, Kiro credits) while their agents run.
 - **Review changes**: an agent's diffs, offered when it finishes.
-- **Follow mode**: switch spaces in Herdr's terminal and the hub window follows.
+- **Follow mode**: switch spaces in Herdr's terminal and the Cockpit window follows.
 - **When Herdr isn't running**: says why (not installed, not running, crashed, incompatible), starts it in the background on request, and reconnects when it's back.
 
 ## Requirements
 
-- Herdr 0.9 (socket protocol 22; tested with 0.9.1), running on the same machine as the extension. A newer protocol shows an "incompatible" screen until Herdr Hub is updated. With Remote-SSH, the extension runs on the server next to Herdr.
+- Herdr 0.9 (socket protocol 22; tested with 0.9.1), running on the same machine as the extension. A newer protocol shows an "incompatible" screen until Herdr Cockpit is updated. With Remote-SSH, the extension runs on the server next to Herdr.
 - macOS or Linux.
 
 ## Get started
 
-1. Install **Herdr Hub** from the Extensions view (VS Code Marketplace; Open VSX for Cursor, Kiro and Positron), or download the `.vsix` from [Releases](https://github.com/sriharirao92/herdr-hub/releases) and run `code --install-extension herdr-hub.vsix` (or `cursor`, `kiro`, `positron`).
+1. Install **Herdr Cockpit** from the Extensions view (VS Code Marketplace; Open VSX for Cursor, Kiro and Positron), or download the `.vsix` from [Releases](https://github.com/sriharirao92/vscode-herdr-cockpit/releases) and run `code --install-extension herdr-cockpit.vsix` (or `cursor`, `kiro`, `positron`).
 2. Run Herdr as usual, or click **Start Herdr** in the sidebar.
-3. Run **Herdr Hub: Set Up Hub Window**. The hub window's first folder (`~/.herdr-hub`) never changes, so switching spaces never restarts your extensions.
+3. Run **Herdr Cockpit: Set Up Cockpit Window**. The Cockpit window's first folder (`~/.herdr-cockpit`) never changes, so switching spaces never restarts your extensions.
 4. Click a space.
 
-The **Get started with Herdr Hub** walkthrough covers the same steps (Command Palette: **Welcome: Open Walkthrough…**).
+The **Get started with Herdr Cockpit** walkthrough covers the same steps (Command Palette: **Welcome: Open Walkthrough…**).
 
-**Can't see the sidebar?** In Cursor the activity bar is a row of icons across the top of the sidebar, and Herdr Hub may be behind the **⌄** arrow at its end. The Command Palette always works: **Herdr Hub: Focus on Spaces & Agents View**.
+**Can't see the sidebar?** In Cursor the activity bar is a row of icons across the top of the sidebar, and Herdr Cockpit may be behind the **⌄** arrow at its end. The Command Palette always works: **Herdr Cockpit: Focus on Spaces & Agents View**.
 
 ## The Herdr plugin
 
 Working in Herdr's terminal? The companion plugin jumps from Herdr to the editor:
 
 ```bash
-herdr plugin install sriharirao92/herdr-hub/plugin
+herdr plugin install sriharirao92/vscode-herdr-cockpit/plugin
 ```
 
-- **Open in editor**: the space and pane you're on, in the hub window.
+- **Open in editor**: the space and pane you're on, in the Cockpit window.
 - **Open selected file in editor**: select `src/app.ts:42:7` (or `app.py", line 12`, `file.ts(42,7)`, `file.ts#L42`) in any pane.
 - **Review changes in editor**, **Status**, and **Set up editor** (finds your editors, installs the extension, offers keybindings).
 
@@ -55,13 +62,13 @@ All settings start with `herdr.`; the guide (`?` in the sidebar) lists them. Mos
 | `herdr.terminalLocation` | `editor`, `editorSplit` (agents left, shells right) or `panel` |
 | `herdr.autoAttachShells` | Also open plain shells when switching spaces |
 | `herdr.closeTabInHerdr` | Closing a tab's X closes it in Herdr: `ask` (idle shells close at once; agents and busy shells ask), `always`, `never` |
-| `herdr.offerHubOnStartup` | Offer to open Herdr Hub when a window opens: `emptyWindows` (default), `allWindows`, `never` |
-| `herdr.startServer` | Start Herdr when the hub window opens: `ask`, `always`, `never` |
-| `herdr.binaryPath`, `herdr.socketPath` | A herdr binary or socket (named session) Herdr Hub doesn't find itself |
+| `herdr.offerHubOnStartup` | Offer to open Herdr Cockpit when a window opens: `emptyWindows` (default), `allWindows`, `never` |
+| `herdr.startServer` | Start Herdr when the Cockpit window opens: `ask`, `always`, `never` |
+| `herdr.binaryPath`, `herdr.socketPath` | A herdr binary or socket (named session) Herdr Cockpit doesn't find itself |
 
 ## Privacy and security
 
-Nothing leaves your machine. Herdr Hub talks to your local Herdr server, runs read-only git in trusted windows, and reads usage from your agents' local files (never credentials). See [SECURITY.md](SECURITY.md).
+Nothing leaves your machine. Herdr Cockpit talks to your local Herdr server, runs read-only git in trusted windows, and reads usage from your agents' local files (never credentials). See [SECURITY.md](SECURITY.md).
 
 ## Development
 

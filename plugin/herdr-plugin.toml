@@ -1,65 +1,65 @@
-# Herdr Hub: open what you're looking at in Herdr in VS Code, Cursor, Kiro or Positron, with the Herdr Hub
+# Herdr Cockpit: open what you're looking at in Herdr in VS Code, Cursor, Kiro or Positron, with the Herdr Cockpit
 # extension showing your spaces, agents and shells.
 #
-#   herdr plugin install sriharirao92/herdr-hub/plugin
+#   herdr plugin install sriharirao92/vscode-herdr-cockpit/plugin
 #
-# Everything is one POSIX shell script (herdr-hub.sh): no build step, no runtime to install.
-id = "sriharirao.herdr-hub"
-name = "Herdr Hub"
-version = "0.1.0"
-# Tested against herdr 0.9.1 (protocol 22), the version the Herdr Hub extension speaks.
+# Everything is one POSIX shell script (herdr-cockpit.sh): no build step, no runtime to install.
+id = "sriharirao.vscode-herdr-cockpit"
+name = "Herdr Cockpit for VS Code"
+version = "0.2.0"
+# Tested with herdr 0.9.1 and 0.9.3 (protocol 22), the protocol the Herdr Cockpit extension speaks.
 min_herdr_version = "0.9.1"
 platforms = ["macos", "linux"]
-description = "Open the space or pane you're on in VS Code, Cursor, Kiro or Positron with the Herdr Hub extension; open selected file:line paths; review an agent's changes in the editor."
+description = "Work on your Herdr spaces in one VS Code window (or Cursor, Kiro, Positron) with the Herdr Cockpit extension: files, git review, diffs and every editor extension next to your agents, plus Claude Code, Codex and Kiro usage. Opens the space or pane you're on, and selected file:line paths."
 
 [[actions]]
 id = "open"
-title = "Herdr Hub: Open in editor"
+title = "Herdr Cockpit: Open in editor"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["sh", "herdr-hub.sh", "open"]
+command = ["sh", "herdr-cockpit.sh", "open"]
 
 [[actions]]
 id = "open-file"
-title = "Herdr Hub: Open selected file in editor"
+title = "Herdr Cockpit: Open selected file in editor"
 contexts = ["selection", "pane"]
-command = ["sh", "herdr-hub.sh", "open-file"]
+command = ["sh", "herdr-cockpit.sh", "open-file"]
 
 [[actions]]
 id = "review"
-title = "Herdr Hub: Review changes in editor"
+title = "Herdr Cockpit: Review changes in editor"
 contexts = ["workspace", "pane"]
-command = ["sh", "herdr-hub.sh", "review"]
+command = ["sh", "herdr-cockpit.sh", "review"]
 
 [[actions]]
 id = "status"
-title = "Herdr Hub: Status"
+title = "Herdr Cockpit: Status"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["sh", "herdr-hub.sh", "popup", "status"]
+command = ["sh", "herdr-cockpit.sh", "popup", "status"]
 
 [[actions]]
 id = "setup"
-title = "Herdr Hub: Set up editor"
+title = "Herdr Cockpit: Set up editor"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["sh", "herdr-hub.sh", "popup", "setup"]
+command = ["sh", "herdr-cockpit.sh", "popup", "setup"]
 
 # Interactive screens. Popups get no HERDR_PANE_ID, so actions pass what they need with --env.
 [[panes]]
 id = "setup"
-title = "Herdr Hub setup"
+title = "Herdr Cockpit setup"
 placement = "popup"
 width = "80%"
 height = "80%"
-command = ["sh", "-c", "exec sh \"$HERDR_PLUGIN_ROOT/herdr-hub.sh\" setup"]
+command = ["sh", "-c", "exec sh \"$HERDR_PLUGIN_ROOT/herdr-cockpit.sh\" setup"]
 
 [[panes]]
 id = "status"
-title = "Herdr Hub status"
+title = "Herdr Cockpit status"
 placement = "popup"
 width = "80%"
 height = 20
-command = ["sh", "-c", "exec sh \"$HERDR_PLUGIN_ROOT/herdr-hub.sh\" status"]
+command = ["sh", "-c", "exec sh \"$HERDR_PLUGIN_ROOT/herdr-cockpit.sh\" status"]
 
 # Optional (review_on_done in config.toml): open an agent's changes when it finishes.
 [[events]]
 on = "pane.agent_status_changed"
-command = ["sh", "herdr-hub.sh", "on-status"]
+command = ["sh", "herdr-cockpit.sh", "on-status"]

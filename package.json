@@ -1,8 +1,8 @@
 {
-  "name": "herdr-hub",
-  "displayName": "Herdr Hub",
-  "description": "Community client for Herdr: your Herdr spaces, agents and shells in one VS Code window. Switch spaces, open agents as terminal tabs, review their changes. Works in VS Code, Cursor, Kiro and Positron.",
-  "version": "0.1.2",
+  "name": "herdr-cockpit",
+  "displayName": "Herdr Cockpit",
+  "description": "Your Herdr agents and spaces in one VS Code window: files, git, diffs and all your extensions next to the agents, with Claude Code, Codex and Kiro usage in one place. No extra Herdr plugins or windows.",
+  "version": "0.2.0",
   "publisher": "sriharirao",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -12,11 +12,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sriharirao92/herdr-hub.git"
+    "url": "https://github.com/sriharirao92/vscode-herdr-cockpit.git"
   },
-  "homepage": "https://github.com/sriharirao92/herdr-hub#readme",
+  "homepage": "https://github.com/sriharirao92/vscode-herdr-cockpit#readme",
   "bugs": {
-    "url": "https://github.com/sriharirao92/herdr-hub/issues"
+    "url": "https://github.com/sriharirao92/vscode-herdr-cockpit/issues"
   },
   "engines": {
     "vscode": "^1.90.0"
@@ -28,12 +28,14 @@
     "herdr",
     "agents",
     "ai",
-    "terminal",
-    "multiplexer",
     "claude code",
     "codex",
     "kiro",
-    "worktree"
+    "usage",
+    "terminal",
+    "multiplexer",
+    "worktree",
+    "git"
   ],
   "main": "./out/extension.js",
   "activationEvents": [
@@ -45,7 +47,7 @@
       "activitybar": [
         {
           "id": "herdr",
-          "title": "Herdr Hub",
+          "title": "Herdr Cockpit",
           "icon": "media/herdr.svg"
         }
       ]
@@ -63,147 +65,147 @@
       {
         "command": "herdr.refresh",
         "title": "Refresh",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(refresh)"
       },
       {
         "command": "herdr.switchSpace",
         "title": "Switch to Space",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(arrow-right)"
       },
       {
         "command": "herdr.pinSpace",
         "title": "Mount Space Alongside (Pin)",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(pin)"
       },
       {
         "command": "herdr.unmountSpace",
         "title": "Unmount Space",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(close)"
       },
       {
         "command": "herdr.attach",
         "title": "Attach Terminal",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(terminal)"
       },
       {
         "command": "herdr.reviewChanges",
         "title": "Review Agent Changes",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(diff)"
       },
       {
         "command": "herdr.focusAttention",
         "title": "Jump to Agent Needing Attention",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.openTui",
         "title": "Open Herdr TUI",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(window)"
       },
       {
         "command": "herdr.setupHub",
-        "title": "Set Up Hub Window",
-        "category": "Herdr Hub"
+        "title": "Set Up Cockpit Window",
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.toggleFollow",
         "title": "Follow Herdr Focus",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "toggled": "config.herdr.followMode"
       },
       {
         "command": "herdr.dumpSnapshot",
         "title": "Show Raw Session Snapshot",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.toggleShellPanes",
         "title": "Toggle Shell Panes",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(terminal)"
       },
       {
         "command": "herdr.openSettings",
         "title": "Settings",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(settings-gear)"
       },
       {
         "command": "herdr.showRaw",
         "title": "Show Raw Herdr Record",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(json)"
       },
       {
         "command": "herdr.openHelp",
         "title": "How to Read the Sidebar",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(question)"
       },
       {
         "command": "herdr.newTab",
         "title": "New Tab…",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(add)"
       },
       {
         "command": "herdr.rename",
         "title": "Rename…",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.closeInHerdr",
         "title": "Close in Herdr…",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.newSpace",
         "title": "New Space…",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(add)"
       },
       {
         "command": "herdr.setupClaudeUsage",
         "title": "Show Claude Plan Limits in the Sidebar…",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.setKiroCredits",
         "title": "Set Kiro Monthly Credits…",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.startServer",
         "title": "Start Herdr",
-        "category": "Herdr Hub",
+        "category": "Herdr Cockpit",
         "icon": "$(play)"
       },
       {
         "command": "herdr.copyDiagnostics",
         "title": "Copy Diagnostics",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.connectionMenu",
         "title": "Connection Options",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.openInstallDocs",
         "title": "Install Herdr",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       },
       {
         "command": "herdr.installPlugin",
         "title": "Install the Herdr Plugin",
-        "category": "Herdr Hub"
+        "category": "Herdr Cockpit"
       }
     ],
     "menus": {
@@ -332,7 +334,7 @@
       ]
     },
     "configuration": {
-      "title": "Herdr Hub",
+      "title": "Herdr Cockpit",
       "properties": {
         "herdr.binaryPath": {
           "type": "string",
@@ -355,11 +357,11 @@
           ],
           "default": "ask",
           "enumDescriptions": [
-            "Ask once when the hub window opens and Herdr isn't running, then remember the answer.",
-            "Start Herdr in the background whenever the hub window opens and it isn't running.",
+            "Ask once when the Cockpit window opens and Herdr isn't running, then remember the answer.",
+            "Start Herdr in the background whenever the Cockpit window opens and it isn't running.",
             "Never start Herdr automatically (the sidebar still offers a Start Herdr button)."
           ],
-          "description": "Whether the Herdr Hub window starts the Herdr server (in the background) when it isn't running."
+          "description": "Whether the Herdr Cockpit window starts the Herdr server (in the background) when it isn't running."
         },
         "herdr.offerHubOnStartup": {
           "type": "string",
@@ -374,12 +376,12 @@
             "Ask in every window that isn't the hub (the hub then opens in a new window).",
             "Never ask."
           ],
-          "description": "When a window opens, offer to open Herdr Hub (only when Herdr is installed and no hub window is open)."
+          "description": "When a window opens, offer to open Herdr Cockpit (only when Herdr is installed and no Cockpit window is open)."
         },
         "herdr.followMode": {
           "type": "boolean",
           "default": true,
-          "description": "When you switch spaces in Herdr (e.g. in your Mac terminal), this window follows. Only active in a hub window or after you've switched a space from VS Code."
+          "description": "When you switch spaces in Herdr (e.g. in your Mac terminal), this window follows. Only active in a Cockpit window or after you've switched a space from VS Code."
         },
         "herdr.terminalLocation": {
           "type": "string",
@@ -470,7 +472,7 @@
         "herdr.hubWindow": {
           "type": "boolean",
           "default": false,
-          "description": "Marks this window as the Herdr hub (set automatically by 'Set up Herdr Hub Window')."
+          "description": "Marks this window as the Herdr Cockpit window (set automatically by 'Set Up Cockpit Window')."
         }
       }
     },
@@ -523,7 +525,7 @@
     "walkthroughs": [
       {
         "id": "getStarted",
-        "title": "Get started with Herdr Hub",
+        "title": "Get started with Herdr Cockpit",
         "description": "Bring your Herdr spaces, agents and shells into this window.",
         "steps": [
           {
@@ -539,8 +541,8 @@
           },
           {
             "id": "hub",
-            "title": "Open the hub window",
-            "description": "A dedicated window whose first folder never changes, so switching spaces never restarts extensions.\n[Set Up Hub Window](command:herdr.setupHub)",
+            "title": "Open the Cockpit window",
+            "description": "A dedicated window whose first folder never changes, so switching spaces never restarts extensions.\n[Set Up Cockpit Window](command:herdr.setupHub)",
             "media": {
               "markdown": "media/walkthrough/hub.md"
             },
@@ -605,7 +607,7 @@
     "pretest": "tsc -p .",
     "test": "node out/test/mockTest.js && node out/test/viewTest.js && node out/test/usageTest.js && node out/test/connectionTest.js && node out/test/hubTest.js && node out/test/pluginTest.js && node out/test/streamTest.js && node out/test/gitTest.js",
     "package": "npm run codicons && tsc -p . && vsce package",
-    "install-local": "npm run package && code --install-extension herdr-hub-$npm_package_version.vsix --force",
+    "install-local": "npm run package && code --install-extension herdr-cockpit-$npm_package_version.vsix --force",
     "lint": "eslint --no-warn-ignored src media/*.js scripts",
     "test:vscode": "npm run compile && node out/test/vscode/run.js"
   },
@@ -624,7 +626,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "In untrusted windows the sidebar doesn't run git, and workspace settings can't mark the window as the Herdr hub.",
+      "description": "In untrusted windows the sidebar doesn't run git, and workspace settings can't mark the window as the Herdr Cockpit window.",
       "restrictedConfigurations": [
         "herdr.hubWindow"
       ]

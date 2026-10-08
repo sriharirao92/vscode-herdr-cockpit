@@ -1,16 +1,19 @@
 name: Release
 
-# Push a tag like v0.1.0 (matching package.json's version) to release.
+# Push a tag like v0.1.0 (matching package.json's version) to release. Re-running is safe: an existing
+# GitHub release gets its files replaced, and stores skip a version they already have.
 on:
   push:
     tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # the GitHub release
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,24 +31,65 @@ jobs:
           npm test
       - name: Package
         run: |
-          npx vsce package --out "herdr-hub-${GITHUB_REF_NAME#v}.vsix"
-          # A stable name too: the Herdr plugin installs releases/latest/download/herdr-hub.vsix.
-          cp "herdr-hub-${GITHUB_REF_NAME#v}.vsix" herdr-hub.vsix
+          npx vsce package --out "herdr-cockpit-${GITHUB_REF_NAME#v}.vsix"
+          # A stable name too: the Herdr plugin installs releases/latest/download/herdr-cockpit.vsix.
+          cp "herdr-cockpit-${GITHUB_REF_NAME#v}.vsix" herdr-cockpit.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: '*.vsix'
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" herdr-hub.vsix "herdr-hub-${GITHUB_REF_NAME#v}.vsix" --title "Herdr Hub ${GITHUB_REF_NAME}" --notes-file CHANGELOG.md
-      # Each token is visible only to its own step (not to npm ci's install scripts or the tests), and the
-      # step skips itself when the secret isn't set.
-      - name: Publish to the VS Code Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
-          if [ -z "$VSCE_PAT" ]; then echo "VSCE_PAT not set: skipping"; exit 0; fi
-          npx vsce publish --packagePath herdr-hub.vsix
-      - name: Publish to Open VSX (Cursor, Kiro, Positron)
+          files=(herdr-cockpit.vsix "herdr-cockpit-${GITHUB_REF_NAME#v}.vsix")
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "Herdr Cockpit ${GITHUB_REF_NAME}" --notes-file CHANGELOG.md
+          fi
+
+  # VS Code Marketplace, signed in with Microsoft Entra ID (no stored token): GitHub's OIDC token is exchanged
+  # for an Entra token through the app registration's federated credential, which trusts only this repository's
+  # `marketplace` environment. Set up once, see RELEASING.md. Skipped until the AZURE_CLIENT_ID variable exists.
+  marketplace:
+    needs: build
+    if: vars.AZURE_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    environment: marketplace
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Pinned to a commit: this step can sign in as the publishing app. Update the SHA and comment together.
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Publish to the VS Code Marketplace
+        run: npx --yes @vscode/vsce@3.9.2 publish --azure-credential --skip-duplicate --packagePath herdr-cockpit.vsix
+
+  # Open VSX (Cursor, Kiro, Positron). The token is visible only to this step.
+  openvsx:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Publish to Open VSX
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         run: |
           if [ -z "$OVSX_PAT" ]; then echo "OVSX_PAT not set: skipping"; exit 0; fi
-          npx --yes ovsx@1 publish herdr-hub.vsix
+          npx --yes ovsx@1 publish herdr-cockpit.vsix --skip-duplicate

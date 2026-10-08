@@ -13,7 +13,7 @@ import { gitInfo } from './gitInfo';
 import { isMounted, mountSpace, unmountSpace } from './folders';
 import { AttachTerminals, TerminalLocationSetting } from './terminals';
 import { backoffDelay, binaryFound, diagnose, Diagnosis, DownReason, herdrEnv, resolveBinary, serverStatus, sessionOfSocket, startServer } from './connection';
-import { editorCli, ensureHubWorkspace, hubDir, hubOpen, hubWorkspaceFile, HubStatus, isInsideRoots, OfferHubSetting, shouldOfferHub, LINK_VERSION, LinkRequest, parseLink, removeHubStatus, takePendingLink, writeEditorRecord, writeHubStatus, writePendingLink } from './hubFiles';
+import { editorCli, ensureHubWorkspace, hubDir, hubOpen, hubWorkspaceFile, HubStatus, isInsideRoots, legacyHubWorkspaceFile, OfferHubSetting, shouldOfferHub, LINK_VERSION, LinkRequest, parseLink, removeHubStatus, takePendingLink, writeEditorRecord, writeHubStatus, writePendingLink } from './hubFiles';
 import { HERDR_PROTOCOL } from './herdrTypes';
 import { reviewChanges } from './review';
 import { showHelp } from './help';
@@ -25,7 +25,7 @@ import { setUpClaudeUsage } from './usageSetup';
 
 const MANAGED_KEY = 'herdr.managedWindow';
 const REVEALED_KEY = 'herdr.hubViewRevealed';
-/** The user chose to switch spaces in this (non-hub) window rather than the hub window. */
+/** The user chose to switch spaces in this (non-hub) window rather than the Cockpit window. */
 const THIS_WINDOW_KEY = 'herdr.useThisWindow';
 
 /** The extension's view of the Herdr server. */
@@ -41,13 +41,13 @@ const DOWN_TEXT: Record<DownReason, string> = {
   'not-installed': "Herdr isn't installed.",
   'not-running': "Herdr isn't running.",
   crashed: 'Herdr stopped unexpectedly.',
-  incompatible: "This Herdr version isn't compatible with Herdr Hub.",
+  incompatible: "This Herdr version isn't compatible with Herdr Cockpit.",
   unreachable: "Herdr is running but isn't answering.",
 };
 /** terminal.integrated.defaultProfile.<key> for this OS. */
 const PLATFORM_KEY = process.platform === 'darwin' ? 'osx' : process.platform === 'win32' ? 'windows' : 'linux';
 /** `herdr plugin install` source of the companion plugin (plugin/ in this repository). */
-const PLUGIN_SOURCE = 'sriharirao92/herdr-hub/plugin';
+const PLUGIN_SOURCE = 'sriharirao92/vscode-herdr-cockpit/plugin';
 /** Quote for a POSIX shell. */
 const shellQuote = (s: string) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
 /** Only task terminals get a description; others show just their name. */
@@ -81,11 +81,11 @@ const PANEL_COMMANDS: Record<string, string> = {
 
 export function activate(ctx: vscode.ExtensionContext) {
   const cfg = () => vscode.workspace.getConfiguration('herdr');
-  const log = vscode.window.createOutputChannel('Herdr Hub');
+  const log = vscode.window.createOutputChannel('Herdr Cockpit');
   // The integration test (src/test/vscode) reads the log from the console.
   if (process.env.HERDR_HUB_TEST_SESSION) {
     const append = log.appendLine.bind(log);
-    log.appendLine = (line: string) => (console.log(`[herdr-hub log] ${line}`), append(line));
+    log.appendLine = (line: string) => (console.log(`[herdr-cockpit log] ${line}`), append(line));
   }
   const client = new HerdrClient(() => resolveSocketPath(cfg().get<string>('socketPath')));
   // When did each agent enter its current state? (observed locally; Herdr exposes only a sequence number)
@@ -128,7 +128,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   let model: Model | undefined;
   /** Each pane's name at the last snapshot, to notice renames made in Herdr. */
   const paneNames = new Map<string, string>();
-  /** Set further down: write the hub window's status file for the Herdr plugin (debounced). */
+  /** Set further down: write the Cockpit window's status file for the Herdr plugin (debounced). */
   let scheduleHubStatus = () => {};
   let eventsLive = false;
   let sub: Subscription | undefined;
@@ -137,10 +137,10 @@ export function activate(ctx: vscode.ExtensionContext) {
   let firstLoad = true;
   let switching = false;
 
-  // The hub is our own ~/.herdr-hub workspace; a repo's settings claiming `herdr.hubWindow` don't make it one
-  // (the hub writes terminal settings into its workspace file).
-  const hubFile = hubWorkspaceFile();
-  const isHubWindow = () => !!cfg().get<boolean>('hubWindow') && vscode.workspace.workspaceFile?.fsPath === hubFile;
+  // The Cockpit window is our own ~/.herdr-cockpit workspace (or, from before the rename, ~/.herdr-hub's); a repo's
+  // settings claiming `herdr.hubWindow` don't make it one (the Cockpit window writes terminal settings into its file).
+  const hubFiles = [hubWorkspaceFile(), legacyHubWorkspaceFile()];
+  const isHubWindow = () => !!cfg().get<boolean>('hubWindow') && hubFiles.includes(vscode.workspace.workspaceFile?.fsPath ?? '');
   const isManagedWindow = () => isHubWindow() || ctx.workspaceState.get<boolean>(MANAGED_KEY, false);
   // git reads each repo's own config; only run it once the window is trusted (see gitInfo.ts).
   const git = (cwd?: string) => (vscode.workspace.isTrusted ? gitInfo(cwd, scheduleRender) : undefined);
@@ -373,14 +373,14 @@ export function activate(ctx: vscode.ExtensionContext) {
     return isConnected();
   }
 
-  /** The hub window opened with Herdr stopped: start it, per herdr.startServer (asked once, then remembered). */
+  /** The Cockpit window opened with Herdr stopped: start it, per herdr.startServer (asked once, then remembered). */
   async function maybeAutoStart() {
     if (!isHubWindow() || conn.kind !== 'down' || (conn.reason !== 'not-running' && conn.reason !== 'crashed')) return;
     const mode = cfg().get<'ask' | 'always' | 'never'>('startServer', 'ask');
     if (mode === 'never') return;
     if (mode === 'always') return void startHerdr();
     const pick = await vscode.window.showInformationMessage(
-      "Herdr isn't running. Start it in the background whenever the Herdr Hub window opens?",
+      "Herdr isn't running. Start it in the background whenever the Herdr Cockpit window opens?",
       'Always Start Herdr',
       'Not Now',
       'Never',
@@ -603,8 +603,8 @@ export function activate(ctx: vscode.ExtensionContext) {
     const r = await mountSpace(space, pin);
     if (r === 'no-window') {
       const pick = await vscode.window.showWarningMessage(
-        'Herdr: open a folder or the Herdr hub window first, so spaces can be mounted next to it.',
-        'Set up hub window',
+        'Herdr: open a folder or the Herdr Cockpit window first, so spaces can be mounted next to it.',
+        'Set up Cockpit window',
       );
       if (pick) vscode.commands.executeCommand('herdr.setupHub');
       return false;
@@ -624,8 +624,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   /**
-   * Switching spaces outside the hub window turns the window into an untitled workspace (or adds folders to
-   * the user's own workspace). The first time, offer the hub window instead; a window with no folder can't
+   * Switching spaces outside the Cockpit window turns the window into an untitled workspace (or adds folders to
+   * the user's own workspace). The first time, offer the Cockpit window instead; a window with no folder can't
    * take spaces, so it goes straight to the hub. True: go ahead here.
    */
   async function useThisWindow(space: Space, pane?: Pane): Promise<boolean> {
@@ -644,18 +644,18 @@ export function activate(ctx: vscode.ExtensionContext) {
         ? 'This window is an untitled workspace.'
         : `Switching spaces here adds folders to your workspace "${vscode.workspace.name}".`;
     const pick = await vscode.window.showInformationMessage(
-      `${why} Open the Herdr hub window instead?`,
-      { modal: true, detail: "The hub window's first folder never changes, so switching spaces there never restarts your extensions. This window remembers your choice." },
-      'Open Hub Window',
+      `${why} Open the Herdr Cockpit window instead?`,
+      { modal: true, detail: "The Cockpit window's first folder never changes, so switching spaces there never restarts your extensions. This window remembers your choice." },
+      'Open Cockpit Window',
       'Use This Window',
     );
-    if (pick === 'Open Hub Window') return toHub();
+    if (pick === 'Open Cockpit Window') return toHub();
     if (pick !== 'Use This Window') return false;
     await ctx.workspaceState.update(THIS_WINDOW_KEY, true);
     return true;
   }
 
-  /** False when the switch didn't happen in this window (handed to the hub window, or cancelled). */
+  /** False when the switch didn't happen in this window (handed to the Cockpit window, or cancelled). */
   /**
    * The editor's Welcome / walkthrough page is in the way once a space is open: close it. The tab API shows
    * it as a tab without an input (like other built-in editors), so it's recognized by its label.
@@ -798,7 +798,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('herdr.copyDiagnostics', async () => {
       const st = await serverStatus(binary(), herdrEnvNow());
       const text = [
-        `Herdr Hub ${ctx.extension.packageJSON.version} · VS Code ${vscode.version} · ${process.platform}`,
+        `Herdr Cockpit ${ctx.extension.packageJSON.version} · VS Code ${vscode.version} · ${process.platform}`,
         `connection: ${JSON.stringify(conn)}`,
         `binary: ${binary()} (${binaryFound(binary()) ? 'found' : 'NOT FOUND'})`,
         `socket: ${socketPath()}${cfg().get<string>('socketPath') ? ' (herdr.socketPath)' : ''} (${fs.existsSync(socketPath()) ? 'exists' : 'missing'})`,
@@ -806,7 +806,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         `expected protocol: ${HERDR_PROTOCOL}`,
       ].join('\n');
       await vscode.env.clipboard.writeText(text);
-      vscode.window.showInformationMessage('Herdr Hub: diagnostics copied to the clipboard.');
+      vscode.window.showInformationMessage('Herdr Cockpit: diagnostics copied to the clipboard.');
     }),
     vscode.commands.registerCommand('herdr.connectionMenu', async () => {
       if (isConnected()) return vscode.commands.executeCommand('herdr.focusAttention');
@@ -939,7 +939,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
   );
 
-  // ---------- hub window, deep links, files for the Herdr plugin (hubFiles.ts) ----------
+  // ---------- Cockpit window, deep links, files for the Herdr plugin (hubFiles.ts) ----------
   const scheme = vscode.env.uriScheme;
   const extensionVersion: string = ctx.extension.packageJSON.version;
 
@@ -947,8 +947,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   async function openHub(newWindow = true) {
     const file = ensureHubWorkspace({
       'herdr.hubWindow': true,
-      'files.exclude': { 'herdr-hub.code-workspace': true },
-      // Hub window = editor + Herdr; hide the built-in AI chat here only.
+      'files.exclude': { 'herdr-cockpit.code-workspace': true },
+      // Cockpit window = editor + Herdr; hide the built-in AI chat here only.
       'chat.disableAIFeatures': true,
       'workbench.secondarySideBar.defaultVisibility': 'visible',
       'terminal.integrated.tabs.description': HUB_TAB_DESCRIPTION,
@@ -964,14 +964,14 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   /**
    * A link from the Herdr plugin (or anywhere: links are validated in parseLink and can only pick a space,
-   * pane or file). Links act in the hub window; another window hands them over and opens the hub.
+   * pane or file). Links act in the Cockpit window; another window hands them over and opens the hub.
    */
   async function handleLink(uri: vscode.Uri) {
     let req: LinkRequest;
     try {
       req = parseLink(uri.path, uri.query);
     } catch (e: any) {
-      vscode.window.showWarningMessage(`Herdr Hub: can't open this link: ${e.message}.`);
+      vscode.window.showWarningMessage(`Herdr Cockpit: can't open this link: ${e.message}.`);
       return;
     }
     if (!isHubWindow()) {
@@ -986,7 +986,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     log.appendLine(`link: ${req.kind} ${JSON.stringify(req)}`);
     if (req.session !== undefined && req.session !== currentSession()) {
       const pick = await vscode.window.showWarningMessage(
-        `This link is for the Herdr session "${req.session}", but Herdr Hub is connected to ${currentSession() ? `"${currentSession()}"` : 'the default session'}.`,
+        `This link is for the Herdr session "${req.session}", but Herdr Cockpit is connected to ${currentSession() ? `"${currentSession()}"` : 'the default session'}.`,
         `Switch to "${req.session}"`,
       );
       if (!pick) return;
@@ -1009,7 +1009,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         if (ok !== 'Open') return;
       }
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(req.path)).then(undefined, () => undefined);
-      if (!doc) return void vscode.window.showWarningMessage(`Herdr Hub: can't open ${req.path}.`);
+      if (!doc) return void vscode.window.showWarningMessage(`Herdr Cockpit: can't open ${req.path}.`);
       const pos = new vscode.Position(Math.max(0, (req.line ?? 1) - 1), Math.max(0, (req.col ?? 1) - 1));
       await vscode.window.showTextDocument(doc, { selection: new vscode.Range(pos, pos), preview: false });
       return;
@@ -1020,7 +1020,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     const sp = hit?.space ?? model?.spaces.find((s) => s.id === req.space) ?? (req.label ? model?.spaces.find((s) => s.label === req.label) : undefined);
     vscode.commands.executeCommand('herdr.spaces.focus').then(undefined, () => {});
     if (!sp) {
-      if (req.space || req.label || req.pane) vscode.window.showWarningMessage(`Herdr Hub: that space or pane isn't in Herdr anymore.`);
+      if (req.space || req.label || req.pane) vscode.window.showWarningMessage(`Herdr Cockpit: that space or pane isn't in Herdr anymore.`);
       return;
     }
     if (req.kind === 'review') return reviewChanges(hit?.pane.cwd ?? sp.cwd, hit?.pane.label ?? sp.label);
@@ -1047,6 +1047,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   let handoffWatch: fs.FSWatcher | undefined;
   if (isHubWindow())
     try {
+      fs.mkdirSync(hubDir(), { recursive: true }); // a pre-rename Cockpit window may not have it yet
       handoffWatch = fs.watch(hubDir(), (_e, name) => {
         if (name === 'pending-link.json') setTimeout(takeHandoff, 100);
       });
@@ -1054,7 +1055,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       // no hub folder yet
     }
 
-  // Tell the Herdr plugin this editor has Herdr Hub, and how to start it from a terminal.
+  // Tell the Herdr plugin this editor has Herdr Cockpit, and how to start it from a terminal.
   try {
     let applicationName: string | undefined;
     try {
@@ -1076,7 +1077,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     log.appendLine(`could not write the editor record: ${e?.message ?? e}`);
   }
 
-  // The hub window's state, for the plugin's status pane: written on change, plus a heartbeat.
+  // The Cockpit window's state, for the plugin's status pane: written on change, plus a heartbeat.
   let lastHubStatus = '';
   let hubStatusAt = 0;
   function writeStatusNow() {
@@ -1145,7 +1146,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
   terminalDefaults();
 
-  // Hub window: make "+" create Herdr tabs here: "Herdr Shell" becomes this workspace's default profile.
+  // Cockpit window: make "+" create Herdr tabs here: "Herdr Shell" becomes this workspace's default profile.
   // VS Code only applies a workspace default profile in a trusted workspace.
   if (isHubWindow()) {
     const term = vscode.workspace.getConfiguration('terminal.integrated');
@@ -1156,13 +1157,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       );
     };
     once(`defaultProfile.${PLATFORM_KEY}`, SHELL_PROFILE_TITLE);
-    // No Welcome page when the hub window opens (a value you set is left alone).
+    // No Welcome page when the Cockpit window opens (a value you set is left alone).
     const wb = vscode.workspace.getConfiguration('workbench');
     const startup = wb.inspect('startupEditor');
     if (startup?.workspaceValue === undefined && startup?.globalValue === undefined)
       wb.update('startupEditor', 'none', vscode.ConfigurationTarget.Workspace).then(undefined, (e) => log.appendLine(`could not set workbench.startupEditor: ${e?.message ?? e}`));
     if (!vscode.workspace.isTrusted) log.appendLine('hub workspace is not trusted: VS Code ignores its default terminal profile, so "+" opens local shells');
-    // Open the sidebar the first time this hub window opens. Editors with a horizontal activity bar (Cursor) hide
+    // Open the sidebar the first time this Cockpit window opens. Editors with a horizontal activity bar (Cursor) hide
     // extension icons behind an overflow menu, so new users can't find it. Once only: after that, wherever the
     // user put (or closed) the view is left alone.
     if (!ctx.workspaceState.get<boolean>(REVEALED_KEY)) {
@@ -1181,7 +1182,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   /**
    * A window just opened without a folder (a new window, or the editor's first launch): offer to make it the
-   * hub, so you don't have to find the sidebar or run Set Up Hub Window (herdr.offerHubOnStartup).
+   * hub, so you don't have to find the sidebar or run Set Up Cockpit Window (herdr.offerHubOnStartup).
    */
   async function maybeOfferHub() {
     const hasFolder = !!vscode.workspace.workspaceFolders?.length || !!vscode.workspace.workspaceFile;
@@ -1194,13 +1195,13 @@ export function activate(ctx: vscode.ExtensionContext) {
     });
     if (!offer) return;
     const pick = await vscode.window.showInformationMessage(
-      'Working with agents? Open Herdr Hub here to see your Herdr spaces, agents and shells.',
-      'Open Herdr Hub',
+      'Working with agents? Open Herdr Cockpit here to see your Herdr spaces, agents and shells.',
+      'Open Herdr Cockpit',
       'Not Now',
       "Don't Ask Again",
     );
     // An empty window becomes the hub; one with your project keeps it and the hub opens in a new window.
-    if (pick === 'Open Herdr Hub') await openHub(hasFolder);
+    if (pick === 'Open Herdr Cockpit') await openHub(hasFolder);
     else if (pick === "Don't Ask Again") await cfg().update('offerHubOnStartup', 'never', vscode.ConfigurationTarget.Global);
   }
 }

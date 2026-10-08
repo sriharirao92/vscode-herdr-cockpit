@@ -1,28 +1,28 @@
 #!/bin/sh
-# Herdr Hub plugin. POSIX sh on macOS and Linux; needs only Herdr's CLI and standard tools (sed, awk).
+# Herdr Cockpit plugin. POSIX sh on macOS and Linux; needs only Herdr's CLI and standard tools (sed, awk).
 #
-#   herdr-hub.sh open          open the focused space (and pane) in the editor   (action)
-#   herdr-hub.sh open-file     open the selected path[:line[:col]] in the editor (action)
-#   herdr-hub.sh review        review the focused pane's changes in the editor   (action)
-#   herdr-hub.sh popup NAME    open the setup or status popup                    (action)
-#   herdr-hub.sh setup         interactive setup                                 (popup)
-#   herdr-hub.sh status        hub window status                                 (popup)
-#   herdr-hub.sh on-status     pane.agent_status_changed hook                    (event)
+#   herdr-cockpit.sh open          open the focused space (and pane) in the editor   (action)
+#   herdr-cockpit.sh open-file     open the selected path[:line[:col]] in the editor (action)
+#   herdr-cockpit.sh review        review the focused pane's changes in the editor   (action)
+#   herdr-cockpit.sh popup NAME    open the setup or status popup                    (action)
+#   herdr-cockpit.sh setup         interactive setup                                 (popup)
+#   herdr-cockpit.sh status        Cockpit window status                                 (popup)
+#   herdr-cockpit.sh on-status     pane.agent_status_changed hook                    (event)
 #
-# The editor side is the Herdr Hub extension. They talk through deep links,
-# <scheme>://sriharirao.herdr-hub/<action>?..., which the editor's own command line opens
-# (`<cli> --open-url`), and files the extension keeps in ~/.herdr-hub:
+# The editor side is the Herdr Cockpit extension. They talk through deep links,
+# <scheme>://sriharirao.herdr-cockpit/<action>?..., which the editor's own command line opens
+# (`<cli> --open-url`), and files the extension keeps in ~/.herdr-cockpit:
 #   editors/<scheme>.json   editors that have the extension, with their command line
-#   status/<scheme>.json    the hub window's live state
+#   status/<scheme>.json    the Cockpit window's live state
 # Links only ever name a space, a pane or a file; the extension validates them again.
 set -u
 
-PLUGIN_ID=sriharirao.herdr-hub
-EXT_ID=sriharirao.herdr-hub
+PLUGIN_ID=sriharirao.vscode-herdr-cockpit
+EXT_ID=sriharirao.herdr-cockpit
 LINK_VERSION=1
-VSIX_URL=https://github.com/sriharirao92/herdr-hub/releases/latest/download/herdr-hub.vsix
+VSIX_URL=https://github.com/sriharirao92/vscode-herdr-cockpit/releases/latest/download/herdr-cockpit.vsix
 HERDR=${HERDR_BIN_PATH:-herdr}
-HUB_DIR=${HERDR_HUB_DIR:-$HOME/.herdr-hub}
+HUB_DIR=${HERDR_COCKPIT_DIR:-$HOME/.herdr-cockpit}
 CONFIG_DIR=${HERDR_PLUGIN_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/$PLUGIN_ID}
 CONFIG=$CONFIG_DIR/config.toml
 # Herdr runs plugins with the server's PATH, which may be minimal.
@@ -35,7 +35,7 @@ say() { printf '%s\n' "$*"; }
 
 # A message the user sees: a Herdr notification (actions have no terminal), and the plugin log.
 notify() {
-  "$HERDR" notification show "Herdr Hub" --body "$1" >/dev/null 2>&1 || true
+  "$HERDR" notification show "Herdr Cockpit" --body "$1" >/dev/null 2>&1 || true
   say "$1" >&2
 }
 
@@ -74,7 +74,7 @@ config_get() {
 }
 config_set() {
   mkdir -p "$CONFIG_DIR"
-  [ -f "$CONFIG" ] || printf '# Herdr Hub plugin settings. See the plugin README.\n' >"$CONFIG"
+  [ -f "$CONFIG" ] || printf '# Herdr Cockpit plugin settings. See the plugin README.\n' >"$CONFIG"
   tmp=$CONFIG.tmp.$$
   grep -v -E "^[[:space:]]*$1[[:space:]]*=" "$CONFIG" >"$tmp" || true
   printf '%s = "%s"\n' "$1" "$2" >>"$tmp"
@@ -116,7 +116,7 @@ find_cli() {
   if [ "$(uname -s)" = Darwin ]; then
     app=$(editor_field "$1" 3)
     old_ifs=$IFS; IFS=:
-    for d in ${HERDR_HUB_APP_DIRS:-/Applications:$HOME/Applications}; do
+    for d in ${HERDR_COCKPIT_APP_DIRS:-/Applications:$HOME/Applications}; do
       IFS=$old_ifs
       for n in $(editor_field "$1" 4); do
         c="$d/$app/Contents/Resources/app/bin/$n"
@@ -165,10 +165,10 @@ choose_editor() {
 
 # open_link SCHEME ACTION QUERY: hand the link to the editor's command line (it starts the editor if needed).
 open_link() {
-  cli=$(find_cli "$1") || { notify "Can't find $(editor_name "$1")'s command line. Run Herdr Hub: Set up editor."; return 1; }
+  cli=$(find_cli "$1") || { notify "Can't find $(editor_name "$1")'s command line. Run Herdr Cockpit: Set up editor."; return 1; }
   lv=$(ext_link_version "$1")
   if [ -n "$lv" ] && [ "$lv" -lt "$LINK_VERSION" ]; then
-    notify "Update the Herdr Hub extension in $(editor_name "$1"): this plugin needs a newer one."
+    notify "Update the Herdr Cockpit extension in $(editor_name "$1"): this plugin needs a newer one."
     return 1
   fi
   url="$1://$EXT_ID/$2?v=$LINK_VERSION$3$(q session "$(session_name)")"
@@ -283,7 +283,7 @@ age() { # seconds since a ms timestamp
 }
 
 cmd_status() {
-  say "Herdr Hub"
+  say "Herdr Cockpit"
   say ""
   default=$(choose_editor 2>/dev/null) || default=
   found=0
@@ -297,17 +297,17 @@ cmd_status() {
     if [ -f "$st" ] && kill -0 "$(json_num pid <"$st")" 2>/dev/null && [ "$(age "$(json_num updated <"$st")")" -lt 90 ]; then
       if grep -q '"connected": true' "$st"; then
         sp=$(json_str space <"$st")
-        say "    hub window: connected${sp:+, space \"$sp\"}, $(json_num tabs <"$st") tabs open"
+        say "    Cockpit window: connected${sp:+, space \"$sp\"}, $(json_num tabs <"$st") tabs open"
         say "    agents: $(json_num working <"$st") working, $(json_num blocked <"$st") blocked, $(json_num done <"$st") done, $(json_num idle <"$st") idle"
       else
-        say "    hub window: open, not connected to Herdr ($(json_str state <"$st"))"
+        say "    Cockpit window: open, not connected to Herdr ($(json_str state <"$st"))"
       fi
     else
-      say "    hub window: not open"
+      say "    Cockpit window: not open"
     fi
   done
   if [ "$found" = 0 ]; then
-    say "  No editor has the Herdr Hub extension yet. Run Herdr Hub: Set up editor."
+    say "  No editor has the Herdr Cockpit extension yet. Run Herdr Cockpit: Set up editor."
   fi
   sess=$(session_name)
   say ""
@@ -316,13 +316,13 @@ cmd_status() {
 }
 
 install_extension() { # install_extension CLI NAME
-  say "Installing Herdr Hub in $2..."
+  say "Installing Herdr Cockpit in $2..."
   if (unset VSCODE_IPC_HOOK_CLI ELECTRON_RUN_AS_NODE; "$1" --install-extension "$EXT_ID") 2>&1 | tail -n 2 && cli_has_extension "$1"; then
     return 0
   fi
   say "Not in $2's extension store; trying the latest GitHub release..."
   tmp=$(mktemp -d 2>/dev/null || mktemp -d -t herdrhub) || return 1
-  vsix=$tmp/herdr-hub.vsix
+  vsix=$tmp/herdr-cockpit.vsix
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL -o "$vsix" "$VSIX_URL"
   else
@@ -361,7 +361,7 @@ offer_key() {
 }
 
 cmd_setup() {
-  say "Herdr Hub setup"
+  say "Herdr Cockpit setup"
   say "================"
   say ""
   editors=$(list_editors)
@@ -371,7 +371,7 @@ cmd_setup() {
       host=$(config_get ssh_host "$(hostname 2>/dev/null)")
       say ""
       say "Herdr runs on a server? Open it from your own computer with Remote-SSH, then install"
-      say "Herdr Hub there and run \"Herdr Hub: Set Up Hub Window\":"
+      say "Herdr Cockpit there and run \"Herdr Cockpit: Set Up Cockpit Window\":"
       say ""
       say "    code --remote ssh-remote+$host $HOME"
       say ""
@@ -396,7 +396,7 @@ cmd_setup() {
     s=${line%%|*}
     v=$(ext_version "$s")
     [ "$s" = "$current" ] && default_i=$i
-    say "  $i) $(editor_name "$s")${v:+   Herdr Hub $v}"
+    say "  $i) $(editor_name "$s")${v:+   Herdr Cockpit $v}"
   done
   IFS=$old_ifs
   pick=$(ask "Use which editor? [$default_i]" "$default_i")
@@ -411,21 +411,21 @@ cmd_setup() {
   config_set editor "$s"
   say ""
   if [ -z "$(ext_version "$s")" ] && ! cli_has_extension "$cli"; then
-    case $(ask "Herdr Hub isn't installed in $(editor_name "$s"). Install it now? [Y/n]" y) in
+    case $(ask "Herdr Cockpit isn't installed in $(editor_name "$s"). Install it now? [Y/n]" y) in
     n | N | no)
-      say "Skipped. Install \"Herdr Hub\" from the extensions view, then run this again."
+      say "Skipped. Install \"Herdr Cockpit\" from the extensions view, then run this again."
       pause
       return 0
       ;;
     esac
     if ! install_extension "$cli" "$(editor_name "$s")"; then
-      say "Couldn't install it. Install \"Herdr Hub\" from $(editor_name "$s")'s extensions view."
+      say "Couldn't install it. Install \"Herdr Cockpit\" from $(editor_name "$s")'s extensions view."
       pause
       return 0
     fi
     say "Installed."
   else
-    say "$(editor_name "$s") has Herdr Hub."
+    say "$(editor_name "$s") has Herdr Cockpit."
   fi
   say ""
   say "Keyboard shortcuts in Herdr (prefix is ctrl+b by default):"
@@ -453,7 +453,7 @@ status) cmd_status ;;
 popup) shift && popup "$@" ;;
 parse-location) parse_location "${2:-}" ;; # for tests
 *)
-  say "usage: herdr-hub.sh open|open-file|review|setup|status|popup NAME|on-status" >&2
+  say "usage: herdr-cockpit.sh open|open-file|review|setup|status|popup NAME|on-status" >&2
   exit 64
   ;;
 esac

@@ -155,7 +155,7 @@ export async function startServer(bin: string, env: NodeJS.ProcessEnv, logFile: 
     proc.on('exit', (code) => (exited = code));
     proc.on('error', (e) => {
       exited = -1;
-      fs.appendFileSync(logFile, `\n[herdr hub] could not start ${bin}: ${e.message}\n`);
+      fs.appendFileSync(logFile, `\n[herdr cockpit] could not start ${bin}: ${e.message}\n`);
     });
     proc.unref();
   } finally {

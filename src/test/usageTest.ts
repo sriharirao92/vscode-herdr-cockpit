@@ -5,7 +5,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { claudeCaptureFile, claudeStatusLineScript, codexLiveUsage, currentBlock, readUsage } from '../usage';
+import { claudeCaptureFile, claudeStatusLineScript, codexLiveUsage, currentBlock, legacyClaudeCaptureFile, readUsage } from '../usage';
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-usage-'));
 const put = (rel: string, body: string) => {
@@ -37,7 +37,7 @@ put('.claude/projects/-p/s1.jsonl', [
   JSON.stringify({ type: 'user', timestamp: iso(now - H), message: { content: 'hi' } }),
   msg(now - 30 * 60_000, 'm2', 200, 100),
 ].join('\n'));
-put('.herdr-hub/claude-usage.json', JSON.stringify({ rate_limits: { five_hour: { used_percentage: 42.5, resets_at: sec(now + 2 * H) }, seven_day: { used_percentage: 11, resets_at: sec(now + 50 * H) } } }));
+put('.herdr-cockpit/claude-usage.json', JSON.stringify({ rate_limits: { five_hour: { used_percentage: 42.5, resets_at: sec(now + 2 * H) }, seven_day: { used_percentage: 11, resets_at: sec(now + 50 * H) } } }));
 
 // Kiro: credits today, earlier this month, and last month (ignored).
 const local = (d: number, h: number) => new Date(2026, 9, d, h).getTime();
@@ -77,7 +77,18 @@ put('.kiro/sessions/cli/a.json', JSON.stringify({ session_state: { conversation_
   );
   console.log('✓ kiro credits today / this month');
 
+  // A status line set up before the rename (Herdr Hub) still writes ~/.herdr-hub/claude-usage.json: read the newer one.
+  const legacy = legacyClaudeCaptureFile(home);
+  fs.mkdirSync(path.dirname(legacy), { recursive: true });
+  fs.writeFileSync(legacy, JSON.stringify({ rate_limits: { five_hour: { used_percentage: 77, resets_at: sec(now + H) } } }));
+  const later = new Date(Date.now() + 60_000);
+  fs.utimesSync(legacy, later, later);
+  assert.strictEqual((await readUsage(home, now))[0].windows[0].usedPercent, 77, 'the newer (pre-rename) capture wins');
   fs.rmSync(claudeCaptureFile(home));
+  assert.strictEqual((await readUsage(home, now))[0].windows[0].usedPercent, 77, 'the pre-rename capture alone still works');
+  fs.rmSync(legacy);
+  console.log('✓ claude capture from before the rename still read');
+
   const noCapture = (await readUsage(home, now))[0];
   assert.strictEqual(noCapture.canSetUpLimits, true, 'offers setup without a capture');
   const est = Math.floor((now - 2 * H - 10 * 60_000) / H) * H;

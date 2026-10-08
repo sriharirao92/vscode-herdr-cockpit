@@ -1,7 +1,7 @@
 // Integration test in a real editor: `npm run test:vscode` (macOS or Linux, needs herdr and VS Code).
 //
-// Starts a separate editor instance (own user-data and extensions folders, a temporary HOME so its hub window
-// is ~/.herdr-hub of that HOME) with this extension loaded from source, against a throwaway Herdr session
+// Starts a separate editor instance (own user-data and extensions folders, a temporary HOME so its Cockpit window
+// is ~/.herdr-cockpit of that HOME) with this extension loaded from source, against a throwaway Herdr session
 // (`hb-vsc`), never the default one. The suite (suite.ts) runs inside that editor.
 //   HERDR_HUB_TEST_EDITOR   editor executable (default: VS Code's in /Applications on macOS, `code` on Linux)
 import { execFileSync, spawn } from 'child_process';
@@ -50,12 +50,12 @@ async function main() {
   const spaces = spaceDirs.map((cwd, i) => herdr(bin, 'workspace', 'create', '--cwd', cwd, '--label', `vsc-int-${i + 1}`).result.workspace.workspace_id as string);
 
   // The hub workspace and user settings of the test editor.
-  fs.mkdirSync(path.join(home, '.herdr-hub'), { recursive: true });
-  const hub = path.join(home, '.herdr-hub', 'herdr-hub.code-workspace');
+  fs.mkdirSync(path.join(home, '.herdr-cockpit'), { recursive: true });
+  const hub = path.join(home, '.herdr-cockpit', 'herdr-cockpit.code-workspace');
   const platformKey = process.platform === 'darwin' ? 'osx' : 'linux';
   fs.writeFileSync(
     hub,
-    JSON.stringify({ folders: [{ path: '.', name: '· herdr hub' }], settings: { 'herdr.hubWindow': true, [`terminal.integrated.defaultProfile.${platformKey}`]: 'Herdr Shell' } }, null, 2),
+    JSON.stringify({ folders: [{ path: '.', name: '· herdr cockpit' }], settings: { 'herdr.hubWindow': true, [`terminal.integrated.defaultProfile.${platformKey}`]: 'Herdr Shell' } }, null, 2),
   );
   const userData = path.join(tmp, 'u');
   fs.mkdirSync(path.join(userData, 'User'), { recursive: true });

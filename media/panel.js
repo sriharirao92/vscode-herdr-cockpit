@@ -328,7 +328,7 @@
       'not-installed': {
         icon: 'cloud-download',
         title: "Herdr isn't installed",
-        text: 'Herdr Hub shows and controls a Herdr server, and needs the <code>herdr</code> command.',
+        text: 'Herdr Cockpit shows and controls a Herdr server, and needs the <code>herdr</code> command.',
         buttons: b('openInstallDocs', 'Install Herdr', true) + b('refresh', 'Retry') + b('openSettings', 'Set herdr path'),
         extra: path('Looked for', c.binary),
       },
@@ -349,7 +349,7 @@
       incompatible: {
         icon: 'versions',
         title: "This Herdr version isn't compatible",
-        text: `Herdr ${esc(c.version || '?')} speaks protocol ${esc(c.protocol ?? '?')}; Herdr Hub expects ${esc(c.expectedProtocol)}. Update Herdr (<code>herdr update</code>) or Herdr Hub.`,
+        text: `Herdr ${esc(c.version || '?')} speaks protocol ${esc(c.protocol ?? '?')}; Herdr Cockpit expects ${esc(c.expectedProtocol)}. Update Herdr (<code>herdr update</code>) or Herdr Cockpit.`,
         buttons: b('refresh', 'Retry', true),
       },
       unreachable: {
@@ -367,7 +367,7 @@
       <p>${sc.text}</p>
       <div class="btns">${sc.buttons}</div>
       ${sc.extra || ''}
-      <p class="links"><a href="#" data-act="copyDiagnostics">Copy diagnostics</a> · <a href="#" data-act="setupHub">Set up hub window</a> · <a href="#" data-act="openHelp">Help</a></p>
+      <p class="links"><a href="#" data-act="copyDiagnostics">Copy diagnostics</a> · <a href="#" data-act="setupHub">Set up Cockpit window</a> · <a href="#" data-act="openHelp">Help</a></p>
     </div>`;
   }
 
@@ -376,7 +376,7 @@
     const c = state.connection || {};
     if (c.kind === 'reconnecting') return `<div class="banner">${icon('sync', 'spin')}Reconnecting to Herdr…</div>`;
     if (c.kind === 'connected' && c.protocol && c.protocol !== c.expectedProtocol)
-      return `<div class="banner warn" title="Herdr Hub was built against protocol ${esc(c.expectedProtocol)}">${icon('warning')}Herdr ${esc(c.version || '')} uses protocol ${esc(c.protocol)}; some details may be missing. Update Herdr Hub.</div>`;
+      return `<div class="banner warn" title="Herdr Cockpit was built against protocol ${esc(c.expectedProtocol)}">${icon('warning')}Herdr ${esc(c.version || '')} uses protocol ${esc(c.protocol)}; some details may be missing. Update Herdr Cockpit.</div>`;
     return '';
   }
 

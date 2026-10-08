@@ -1,12 +1,13 @@
-// Files under ~/.herdr-hub that the extension shares with the Herdr plugin (plugin/), and the deep links the
-// plugin opens. No vscode imports.
+// Files under ~/.herdr-cockpit that the extension shares with the Herdr plugin (plugin/), and the deep links the
+// plugin opens. No vscode imports. (Before the rename to Herdr Cockpit, from Herdr Hub, this was ~/.herdr-hub: its
+// workspace is still recognized as the Cockpit window, see legacyHubWorkspaceFile.)
 //
-//   herdr-hub.code-workspace   the hub window's workspace (folder slot 0 = ~/.herdr-hub)
+//   herdr-cockpit.code-workspace   the Cockpit window's workspace (folder slot 0 = ~/.herdr-cockpit)
 //   editors/<scheme>.json      one per editor the extension has run in: how the plugin finds its command line
-//   status/<scheme>.json       the hub window's live state, for the plugin's status pane
-//   pending-link.json          a link that reached a non-hub window, handed to the hub window
+//   status/<scheme>.json       the Cockpit window's live state, for the plugin's status pane
+//   pending-link.json          a link that reached another window, handed to the Cockpit window
 //
-// Links: <scheme>://<publisher>.herdr-hub/<action>?<query>, where <scheme> is the editor's (vscode, cursor,
+// Links: <scheme>://<publisher>.herdr-cockpit/<action>?<query>, where <scheme> is the editor's (vscode, cursor,
 // kiro, positron, ...). Every field is validated here: a link can come from any web page, so it may only
 // pick things the user already has (a space, a pane, a file), never a program or a setting. A file outside
 // the user's spaces and open folders needs a confirmation (isInsideRoots); network paths are refused.
@@ -17,10 +18,14 @@ import * as path from 'path';
 /** Bump when the link format changes incompatibly; the plugin compares it with what it speaks. */
 export const LINK_VERSION = 1;
 
-export const hubDir = (home = os.homedir()) => path.join(home, '.herdr-hub');
-export const hubWorkspaceFile = (home?: string) => path.join(hubDir(home), 'herdr-hub.code-workspace');
+export const hubDir = (home = os.homedir()) => path.join(home, '.herdr-cockpit');
+export const hubWorkspaceFile = (home?: string) => path.join(hubDir(home), 'herdr-cockpit.code-workspace');
+/** The hub workspace from before the rename (Herdr Hub): a window restored with it is still the Cockpit window. */
+/** The name before the rename to Herdr Cockpit, for the legacy paths below. */
+export const LEGACY_NAME = ['herdr', 'hub'].join('-');
+export const legacyHubWorkspaceFile = (home = os.homedir()) => path.join(home, `.${LEGACY_NAME}`, `${LEGACY_NAME}.code-workspace`);
 
-/** Create ~/.herdr-hub and its workspace file if missing (never overwrites). Returns the workspace file. */
+/** Create ~/.herdr-cockpit and its workspace file if missing (never overwrites). Returns the workspace file. */
 export function ensureHubWorkspace(settings: Record<string, unknown>, home?: string): string {
   const dir = hubDir(home);
   fs.mkdirSync(dir, { recursive: true });
@@ -28,10 +33,10 @@ export function ensureHubWorkspace(settings: Record<string, unknown>, home?: str
   if (!fs.existsSync(readme))
     fs.writeFileSync(
       readme,
-      '# Herdr hub\n\nThis folder stays as the first workspace folder so the editor never restarts extensions when you switch Herdr spaces.\nSpaces are mounted below it as `⬢ <name>` folders.\n',
+      '# Herdr Cockpit\n\nThis folder stays as the first workspace folder so the editor never restarts extensions when you switch Herdr spaces.\nSpaces are mounted below it as `⬢ <name>` folders.\n',
     );
   const file = hubWorkspaceFile(home);
-  if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify({ folders: [{ path: '.', name: '· herdr hub' }], settings }, null, 2));
+  if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify({ folders: [{ path: '.', name: '· herdr cockpit' }], settings }, null, 2));
   return file;
 }
 
@@ -124,7 +129,7 @@ export function writeHubStatus(s: HubStatus, home?: string) {
 }
 
 /**
- * A hub window of this editor is open right now: its status file is fresh (heartbeat every 30s) and its
+ * A Cockpit window of this editor is open right now: its status file is fresh (heartbeat every 30s) and its
  * extension host is alive.
  */
 export function hubOpen(scheme: string, home?: string, now = Date.now()): boolean {
@@ -141,13 +146,13 @@ export function hubOpen(scheme: string, home?: string, now = Date.now()): boolea
 
 export type OfferHubSetting = 'emptyWindows' | 'allWindows' | 'never';
 
-/** Whether to ask "Open Herdr Hub here?" when a window opens (herdr.offerHubOnStartup). */
+/** Whether to ask "Open Herdr Cockpit here?" when a window opens (herdr.offerHubOnStartup). */
 export function shouldOfferHub(w: { mode: OfferHubSetting; isHub: boolean; hasFolder: boolean; herdrInstalled: boolean; hubOpenElsewhere: boolean }): boolean {
   if (w.mode === 'never' || w.isHub || !w.herdrInstalled || w.hubOpenElsewhere) return false;
   return w.mode === 'allWindows' || !w.hasFolder;
 }
 
-/** Remove this process's status file (a newer hub window of the same editor may have replaced it: keep that). */
+/** Remove this process's status file (a newer Cockpit window of the same editor may have replaced it: keep that). */
 export function removeHubStatus(scheme: string, pid: number, home?: string) {
   if (!SCHEME.test(scheme)) return;
   const f = statusFile(scheme, home);
@@ -169,7 +174,7 @@ export function parseLink(linkPath: string, query: string): LinkRequest {
   const action = linkPath.replace(/^\/+|\/+$/g, '');
   const q = new URLSearchParams(query);
   const v = Number(q.get('v') ?? LINK_VERSION);
-  if (v > LINK_VERSION) throw new Error(`the link needs a newer Herdr Hub (link version ${v}, this one understands ${LINK_VERSION})`);
+  if (v > LINK_VERSION) throw new Error(`the link needs a newer Herdr Cockpit (link version ${v}, this one understands ${LINK_VERSION})`);
   const id = (k: string) => {
     const x = q.get(k);
     if (x === null || x === '') return undefined;
@@ -225,7 +230,7 @@ export function isInsideRoots(file: string, roots: readonly string[]): boolean {
   });
 }
 
-// ---------- hand-off to the hub window ----------
+// ---------- hand-off to the Cockpit window ----------
 
 const pendingFile = (home?: string) => path.join(hubDir(home), 'pending-link.json');
 

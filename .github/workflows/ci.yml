@@ -30,4 +30,4 @@ jobs:
           git config --global user.email ci@example.invalid
           npm test
       - name: Package
-        run: npx vsce package --out herdr-hub.vsix
+        run: npx vsce package --out herdr-cockpit.vsix

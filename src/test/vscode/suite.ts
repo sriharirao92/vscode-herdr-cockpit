@@ -1,4 +1,4 @@
-// Runs inside the test editor started by run.ts: the hub window, against the throwaway hb-vsc Herdr session.
+// Runs inside the test editor started by run.ts: the Cockpit window, against the throwaway hb-vsc Herdr session.
 import * as assert from 'assert';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
@@ -10,7 +10,7 @@ const SESSION = process.env.HERDR_HUB_TEST_SESSION ?? '';
 const [S1, S2] = (process.env.HERDR_HUB_TEST_SPACES ?? '').split(',');
 const BIN = process.env.HERDR_BIN ?? 'herdr';
 
-// The editor runs with a temporary HOME (its hub window); the herdr CLI needs the real one to find the session.
+// The editor runs with a temporary HOME (its Cockpit window); the herdr CLI needs the real one to find the session.
 const herdr = (...args: string[]) =>
   JSON.parse(execFileSync(BIN, args, { env: { ...process.env, HOME: process.env.HERDR_HUB_TEST_REAL_HOME, HERDR_SESSION: SESSION }, encoding: 'utf8' }));
 const panesOf = (ws: string): string[] =>
@@ -31,10 +31,10 @@ async function until(what: string, ok: () => boolean | Promise<boolean>, ms = 15
   }
   throw new Error(`timed out waiting for: ${what}`);
 }
-const hubStatus = () => JSON.parse(fs.readFileSync(path.join(os.homedir(), '.herdr-hub', 'status', `${vscode.env.uriScheme}.json`), 'utf8'));
-/** Herdr Hub's tabs: drawn by the extension (a pty), never a shell process. */
+const hubStatus = () => JSON.parse(fs.readFileSync(path.join(os.homedir(), '.herdr-cockpit', 'status', `${vscode.env.uriScheme}.json`), 'utf8'));
+/** Herdr Cockpit's tabs: drawn by the extension (a pty), never a shell process. */
 const ours = () => vscode.window.terminals.filter((t) => 'pty' in (t.creationOptions as object));
-const step = (s: string) => console.log(`[herdr-hub test] ${s}`);
+const step = (s: string) => console.log(`[herdr-cockpit test] ${s}`);
 
 export async function run(): Promise<void> {
   try {
@@ -61,8 +61,8 @@ export async function run(): Promise<void> {
 }
 
 async function steps(): Promise<void> {
-  await vscode.extensions.getExtension('sriharirao.herdr-hub')!.activate();
-  assert.strictEqual(vscode.workspace.workspaceFile?.fsPath, path.join(os.homedir(), '.herdr-hub', 'herdr-hub.code-workspace'), 'runs in the hub window');
+  await vscode.extensions.getExtension('sriharirao.herdr-cockpit')!.activate();
+  assert.strictEqual(vscode.workspace.workspaceFile?.fsPath, path.join(os.homedir(), '.herdr-cockpit', 'herdr-cockpit.code-workspace'), 'runs in the Cockpit window');
   await until('connected to Herdr', () => hubStatus().connected === true);
   step('connected');
 
@@ -73,7 +73,7 @@ async function steps(): Promise<void> {
   // 1. Switching to a space opens its pane as a built-in tab.
   await vscode.commands.executeCommand('herdr.switchSpace', { spaceId: S1 });
   try {
-    await until('the space tab', () => ours().length === 1);
+    await until('the space tab (a fresh editor can be slow to mount the first space)', () => ours().length === 1, 30_000);
   } catch (e) {
     console.log('folders:', JSON.stringify(vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath)));
     console.log('terminals:', JSON.stringify(vscode.window.terminals.map((t) => ({ name: t.name, pty: 'pty' in (t.creationOptions as object), exit: t.exitStatus }))));
