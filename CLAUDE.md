@@ -23,6 +23,9 @@ npm run install-local  # package + code --install-extension --force
 Debug: open this folder in VS Code, press F5 (`.vscode/launch.json`) to get an Extension Development Host.
 After installing a new vsix: Command Palette → "Developer: Reload Window".
 Bump `version` in package.json for each vsix you hand to the user.
+README images (`docs/images/*.png`): `docs/screenshots/render.sh` rebuilds them from the throwaway `hb-demo` session
+(see `docs/screenshots/README.md`). Re-render after visible sidebar changes. `docs/**` is kept out of the vsix; vsce
+points the store README's images at GitHub, so they show on the Marketplace and Open VSX after the next release.
 
 ## Architecture (src/)
 | File | Role |

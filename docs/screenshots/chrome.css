@@ -1,0 +1,72 @@
+/* VS Code window chrome (Dark Modern) for the README images. */
+html, body.shot { margin: 0; background: transparent; }
+body.shot { padding: 28px; box-sizing: border-box; width: 100vw; height: 100vh; background: linear-gradient(135deg, #1b2335 0%, #2a1f3d 100%); }
+.window { display: flex; flex-direction: column; height: 100%; border-radius: 10px; overflow: hidden; background: #181818; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08); color: #cccccc; font: 13px var(--vscode-font-family); }
+.titlebar { height: 34px; flex: none; display: flex; align-items: center; justify-content: center; position: relative; background: #181818; border-bottom: 1px solid #2b2b2b; color: #9d9d9d; font-size: 12.5px; }
+.lights { position: absolute; left: 14px; display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+.lights i:nth-child(2) { background: #febc2e; }
+.lights i:nth-child(3) { background: #28c840; }
+.body { flex: 1; display: flex; min-height: 0; }
+.activity { width: 48px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 22px; padding-top: 14px; background: #181818; border-right: 1px solid #2b2b2b; }
+.activity .codicon { font-size: 24px; color: #868686; position: relative; }
+.activity .codicon.active { color: #d7d7d7; box-shadow: -13px 0 0 -11px #0078d4; }
+.badge { position: absolute; right: -8px; bottom: -5px; min-width: 16px; height: 16px; border-radius: 8px; background: #0078d4; color: #fff; font: 600 9px/16px var(--vscode-font-family); text-align: center; }
+.explorer { width: 250px; flex: none; background: #181818; border-right: 1px solid #2b2b2b; overflow: hidden; }
+.pane-title { height: 35px; display: flex; align-items: center; padding: 0 20px; font-size: 11px; letter-spacing: 0.04em; color: #bbbbbb; }
+.section { height: 22px; display: flex; align-items: center; gap: 2px; padding-left: 4px; font-weight: 700; font-size: 11px; color: #cccccc; }
+.section.collapsed { border-top: 1px solid #2b2b2b; }
+.section .codicon, .item .codicon { font-size: 16px; }
+.tree { padding-bottom: 6px; }
+.item { height: 22px; display: flex; align-items: center; gap: 4px; color: #cccccc; white-space: nowrap; }
+.item.d0 { padding-left: 8px; }
+.item.d1 { padding-left: 20px; }
+.item.d2 { padding-left: 32px; }
+.item.d3 { padding-left: 44px; }
+.item.file { padding-left: calc(var(--d, 0px)); }
+.item.d2.file { padding-left: 52px; }
+.item.d3.file { padding-left: 64px; }
+.item.d1.file { padding-left: 40px; }
+.item em { margin-left: auto; margin-right: 12px; font-style: normal; font-size: 12px; }
+.item.u { color: #73c991; }
+.item.a { color: #81b88b; }
+.item.sel { background: #37373d; }
+.ts { font: 700 9px var(--vscode-font-family); color: #4d9fe8; width: 14px; }
+.md { color: #519aba; }
+.editor { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #1f1f1f; }
+.tabs { height: 35px; flex: none; display: flex; background: #181818; border-bottom: 1px solid #2b2b2b; }
+.tab { display: flex; align-items: center; gap: 6px; padding: 0 14px; color: #9d9d9d; border-right: 1px solid #2b2b2b; white-space: nowrap; }
+.tab.active { background: #1f1f1f; color: #ffffff; box-shadow: inset 0 1px 0 #0078d4; }
+.tab .codicon-close { font-size: 14px; margin-left: 6px; }
+.tab .logo { width: 16px; height: 16px; display: inline-flex; }
+.tab .logo svg { width: 16px; height: 16px; }
+.term { flex: 1; padding: 10px 18px; overflow: hidden; background: #181818; }
+.term pre { margin: 0; }
+.term pre > div { font-family: var(--vscode-editor-font-family) !important; font-size: 13px !important; line-height: 1.45 !important; background: transparent !important; color: #cccccc !important; }
+.cockpit { width: 400px; flex: none; display: flex; flex-direction: column; border-left: 1px solid #2b2b2b; background: #181818; }
+.cockpit-title { justify-content: space-between; }
+.cockpit-title .icons { display: flex; gap: 10px; color: #cccccc; }
+.cockpit iframe { flex: 1; border: 0; width: 100%; background: #181818; }
+.statusbar { height: 24px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 10px; background: #181818; border-top: 1px solid #2b2b2b; color: #cccccc; font-size: 12px; }
+.statusbar .codicon { font-size: 14px; vertical-align: -3px; }
+.statusbar .grow { flex: 1; }
+.statusbar .herdr { padding: 0 8px; height: 100%; display: flex; align-items: center; gap: 4px; }
+.statusbar .herdr.warn { background: #b89500; color: #ffffff; }
+.group { display: flex; flex-direction: column; min-height: 0; }
+.group.top { flex: 0 0 43%; border-bottom: 1px solid #2b2b2b; }
+.group.bottom { flex: 1; background: #1f1f1f; }
+.crumbs { height: 22px; display: flex; align-items: center; gap: 2px; padding: 0 16px; color: #a9a9a9; font-size: 12px; }
+.crumbs .codicon { font-size: 14px; }
+.code { padding-top: 4px; font: 13px/19px var(--vscode-editor-font-family); color: #cccccc; }
+.ln { display: flex; align-items: center; height: 19px; }
+.ln i { width: 44px; text-align: right; color: #6e7681; font-style: normal; padding-right: 10px; }
+.ln b { width: 3px; height: 19px; background: #2ea043; margin-right: 14px; }
+.ln code { font: inherit; white-space: pre; }
+.k { color: #c586c0; }
+.s { color: #ce9178; }
+.n { color: #b5cea8; }
+.c { color: #4fc1ff; }
+.t { color: #4ec9b0; }
+.f { color: #dcdcaa; }
+body.shot.bare { padding: 0; background: transparent; }
+body.shot.bare .window { border-radius: 0; box-shadow: none; }

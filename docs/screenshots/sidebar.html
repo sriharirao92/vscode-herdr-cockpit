@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<!-- The real Herdr Cockpit sidebar (media/panel.js + panel.css), fed the demo session's view state. -->
+<html lang="en"><head><meta charset="utf-8">
+<link href="../../media/codicons/codicon.css" rel="stylesheet">
+<link href="../../media/panel.css" rel="stylesheet">
+<link href="theme.css" rel="stylesheet">
+</head><body>
+<main id="app"></main>
+<script>window.acquireVsCodeApi = () => ({ postMessage() {}, getState() { return window.DEMO_UI || null; }, setState() {} });</script>
+<script src="build/state.js"></script>
+<script src="../../media/agent-icons.js"></script>
+<script src="../../media/panel.js"></script>
+<script>window.postMessage({ type: 'state', state: window.DEMO_STATE }, '*');</script>
+</body></html>

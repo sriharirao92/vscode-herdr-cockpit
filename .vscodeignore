@@ -17,3 +17,4 @@ media/icon.svg
 CONTRIBUTING.md
 eslint.config.mjs
 RELEASING.md
+docs/**

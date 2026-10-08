@@ -8,6 +8,8 @@ One plugin and one editor window instead of several plugins and windows:
 - **Agent usage in one place.** The extension shows Claude Code, Codex and Kiro plan limits side by side.
 - **Back and forth in one keystroke.** Open the space or pane you're on in the editor, or a `file:line` you selected in any pane.
 
+![The same Herdr space, in Herdr's terminal and in VS Code. Open in editor (ctrl+b, then shift+E) takes you from one to the other](https://raw.githubusercontent.com/sriharirao92/vscode-herdr-cockpit/main/docs/images/terminal-to-vscode.png)
+
 ```bash
 herdr plugin install sriharirao92/vscode-herdr-cockpit/plugin
 ```

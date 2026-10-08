@@ -4,12 +4,24 @@ Run your [Herdr](https://herdr.dev) agents and do everything around them in **on
 
 Herdr keeps your coding agents (Claude Code, Codex, Kiro, Cursor Agent, Copilot, Gemini and more) running in its terminal multiplexer. Herdr Cockpit brings its spaces, agents and shells into VS Code, so the editor around them is the real one.
 
+![Herdr Cockpit: a Herdr space in VS Code, with its agents as terminal tabs, the files they changed, and the Herdr Cockpit sidebar on the right](docs/images/vscode.png)
+
 ## Why Herdr Cockpit
 
 - **One window instead of a stack of plugins and windows.** No need to add separate Herdr plugins for a file explorer, a web UI or a git reviewer, or to juggle a terminal and several VS Code windows. Switch a space and its folder, files, Source Control, diffs and every agent and shell (as terminal tabs) are right there.
 - **Everything VS Code can do, next to your agents.** Your extensions, language servers, debuggers, notebooks, Markdown preview, image and PDF viewers, and side-by-side diffs work on the files your agents are changing.
 - **Agent usage in one place.** Plan limits for Claude Code, Codex and Kiro side by side: 5-hour and weekly windows with reset times, tokens in the current session, and Kiro credits.
 - **Terminal tabs that behave like Herdr.** Drag to select and copy, scroll Herdr's scrollback, and keep tabs and Herdr in sync: **+** and **Split** create panes, renames go both ways, and closing a tab closes it in Herdr (it asks first for agents).
+
+**From Herdr's terminal to VS Code in one keystroke.** The companion [Herdr plugin](#the-herdr-plugin) opens the space you're on, with its folder and every agent and shell as a tab:
+
+![The same Herdr space, in Herdr's terminal and in VS Code. The Herdr Cockpit plugin's Open in editor key (ctrl+b, then shift+E) takes you from one to the other](docs/images/terminal-to-vscode.png)
+
+**The sidebar** shows what every agent is doing, what each agent's plan has left, who is waiting for you, and each space's git state:
+
+![The Herdr Cockpit sidebar: agent counters, usage for Claude Code, Codex and Kiro, a Needs you list with the end of each agent's screen, and spaces with their branch and changes](docs/images/sidebar.png)
+
+<sub>Images from a demo session (`docs/screenshots`): real Herdr and the real sidebar, with made-up repos, agent screens and usage numbers.</sub>
 
 Works in **VS Code, Cursor, Kiro and Positron** on **macOS and Linux**. A community project, not affiliated with Herdr.
 

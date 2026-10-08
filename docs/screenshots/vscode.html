@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!-- README image: VS Code with a Herdr space open. The window chrome is drawn here; the terminal tab is a real
+     capture of a demo pane and the right sidebar is the real Herdr Cockpit sidebar (sidebar.html). -->
+<html lang="en"><head><meta charset="utf-8">
+<link href="../../media/codicons/codicon.css" rel="stylesheet">
+<link href="theme.css" rel="stylesheet">
+<link href="chrome.css" rel="stylesheet">
+</head><body class="shot">
+<div class="window">
+  <div class="titlebar"><span class="lights"><i></i><i></i><i></i></span><span class="title">herdr-cockpit (Workspace)</span></div>
+  <div class="body">
+    <nav class="activity">
+      <span class="codicon codicon-files active"></span>
+      <span class="codicon codicon-search"></span>
+      <span class="codicon codicon-source-control"><b class="badge">3</b></span>
+      <span class="codicon codicon-debug-alt"></span>
+      <span class="codicon codicon-extensions"></span>
+    </nav>
+    <aside class="explorer">
+      <div class="pane-title">EXPLORER</div>
+      <div class="section"><span class="codicon codicon-chevron-down"></span>HERDR-COCKPIT (WORKSPACE)</div>
+      <div class="tree">
+        <div class="item d0"><span class="codicon codicon-chevron-right"></span>· herdr cockpit</div>
+        <div class="item d0"><span class="codicon codicon-chevron-down"></span>⬢ api-service</div>
+        <div class="item d1"><span class="codicon codicon-chevron-down"></span>src</div>
+        <div class="item d2"><span class="codicon codicon-chevron-down"></span>auth</div>
+        <div class="item d3 file u"><span class="ts">TS</span>middleware.ts<em>U</em></div>
+        <div class="item d2 file"><span class="ts">TS</span>index.ts</div>
+        <div class="item d2 file a sel"><span class="ts">TS</span>rate-limit.ts<em>A</em></div>
+        <div class="item d2 file u"><span class="ts">TS</span>rate-limit.test.ts<em>U</em></div>
+        <div class="item d1 file"><span class="md codicon codicon-markdown"></span>README.md</div>
+      </div>
+      <div class="section collapsed"><span class="codicon codicon-chevron-right"></span>OUTLINE</div>
+      <div class="section collapsed"><span class="codicon codicon-chevron-right"></span>TIMELINE</div>
+    </aside>
+    <main class="editor">
+      <section class="group top">
+        <div class="tabs">
+          <span class="tab active"><span class="logo" data-logo="claude"></span>Claude<span class="codicon codicon-close"></span></span>
+          <span class="tab"><span class="logo" data-logo="codex"></span>Codex</span>
+          <span class="tab"><span class="codicon codicon-terminal"></span>dev server</span>
+        </div>
+        <div class="term" id="pane"></div>
+      </section>
+      <section class="group bottom">
+        <div class="tabs">
+          <span class="tab active"><span class="ts">TS</span>rate-limit.ts<span class="codicon codicon-close"></span></span>
+          <span class="tab"><span class="ts">TS</span>middleware.ts</span>
+        </div>
+        <div class="crumbs">src <span class="codicon codicon-chevron-right"></span> rate-limit.ts</div>
+        <div class="code">
+          <div class="ln"><i>1</i><b></b><code><span class="k">import</span> { Request, Response, NextFunction } <span class="k">from</span> <span class="s">'express'</span>;</code></div>
+          <div class="ln"><i>2</i><b></b><code> </code></div>
+          <div class="ln"><i>3</i><b></b><code><span class="k">const</span> <span class="c">WINDOW_MS</span> = <span class="n">60_000</span>;</code></div>
+          <div class="ln"><i>4</i><b></b><code><span class="k">const</span> <span class="c">MAX_ATTEMPTS</span> = <span class="n">5</span>;</code></div>
+          <div class="ln"><i>5</i><b></b><code><span class="k">const</span> attempts = <span class="k">new</span> <span class="t">Map</span>&lt;<span class="t">string</span>, <span class="t">number</span>[]&gt;();</code></div>
+          <div class="ln"><i>6</i><b></b><code> </code></div>
+          <div class="ln"><i>7</i><b></b><code><span class="k">export function</span> <span class="f">rateLimit</span>(req: <span class="t">Request</span>, res: <span class="t">Response</span>, next: <span class="t">NextFunction</span>) {</code></div>
+          <div class="ln"><i>8</i><b></b><code>  <span class="k">const</span> key = req.ip ?? <span class="s">'unknown'</span>;</code></div>
+          <div class="ln"><i>9</i><b></b><code>  <span class="k">const</span> now = <span class="t">Date</span>.<span class="f">now</span>();</code></div>
+          <div class="ln"><i>10</i><b></b><code>  <span class="k">const</span> recent = (attempts.<span class="f">get</span>(key) ?? []).<span class="f">filter</span>((t) =&gt; now - t &lt; <span class="c">WINDOW_MS</span>);</code></div>
+          <div class="ln"><i>11</i><b></b><code>  <span class="k">if</span> (recent.length &gt;= <span class="c">MAX_ATTEMPTS</span>) {</code></div>
+          <div class="ln"><i>12</i><b></b><code>    res.<span class="f">status</span>(<span class="n">429</span>).<span class="f">json</span>({ error: <span class="s">'Too many login attempts'</span> });</code></div>
+          <div class="ln"><i>13</i><b></b><code>    <span class="k">return</span>;</code></div>
+          <div class="ln"><i>14</i><b></b><code>  }</code></div>
+          <div class="ln"><i>15</i><b></b><code>  attempts.<span class="f">set</span>(key, [...recent, now]);</code></div>
+          <div class="ln"><i>16</i><b></b><code>  <span class="f">next</span>();</code></div>
+          <div class="ln"><i>17</i><b></b><code>}</code></div>
+        </div>
+      </section>
+    </main>
+    <aside class="cockpit">
+      <div class="pane-title cockpit-title">HERDR COCKPIT<span class="icons"><span class="codicon codicon-question"></span><span class="codicon codicon-ellipsis"></span></span></div>
+      <iframe src="sidebar.html" title="Herdr Cockpit sidebar"></iframe>
+    </aside>
+  </div>
+  <footer class="statusbar">
+    <span><span class="codicon codicon-git-branch"></span> feat/rate-limit</span>
+    <span><span class="codicon codicon-sync"></span></span>
+    <span class="grow"></span>
+    <span class="herdr warn"><span class="codicon codicon-hubot"></span> 3 <span class="codicon codicon-sync"></span> 1 <span class="codicon codicon-warning"></span> 1 <span class="codicon codicon-pass-filled"></span> 1</span>
+  </footer>
+</div>
+<script src="build/fragments.js"></script>
+<script src="../../media/agent-icons.js"></script>
+<script>
+  // ?bare: no backdrop, for embedding in flow.html.
+  if (location.search.includes('bare')) document.body.classList.add('bare');
+  document.getElementById('pane').innerHTML = window.DEMO_PANE;
+  const logos = window.HERDR_AGENT_ICONS || {};
+  for (const el of document.querySelectorAll('[data-logo]')) el.innerHTML = logos[el.dataset.logo] || '';
+</script>
+</body></html>

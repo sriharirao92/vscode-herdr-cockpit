@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<!-- README image: the Herdr Cockpit sidebar (real, sidebar.html) with what each part is for. -->
+<html lang="en"><head><meta charset="utf-8">
+<link href="../../media/codicons/codicon.css" rel="stylesheet">
+<link href="theme.css" rel="stylesheet">
+<link href="chrome.css" rel="stylesheet">
+<style>
+  body.feature { margin: 0; width: 100vw; height: 100vh; overflow: hidden; display: flex; gap: 44px; padding: 34px 44px; box-sizing: border-box; background: linear-gradient(135deg, #1b2335 0%, #2a1f3d 100%); font-family: var(--vscode-font-family); color: #dfe6f3; }
+  .panel { flex: none; width: 420px; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; background: #181818; box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08); }
+  .panel .pane-title { justify-content: space-between; color: #bbbbbb; border-bottom: 1px solid #2b2b2b; }
+  .panel iframe { flex: 1; border: 0; width: 100%; }
+  .notes { display: flex; flex-direction: column; justify-content: space-between; padding: 26px 0 40px; }
+  .note h3 { margin: 0 0 6px; font-size: 21px; color: #ffffff; display: flex; align-items: center; gap: 10px; }
+  .note h3 .codicon { font-size: 22px; color: #9fc3ff; }
+  .note p { margin: 0; font-size: 15.5px; line-height: 1.5; max-width: 560px; color: #c9d1e3; }
+</style>
+</head><body class="feature">
+<div class="panel">
+  <div class="pane-title">HERDR COCKPIT<span class="icons"><span class="codicon codicon-question"></span>&nbsp;&nbsp;<span class="codicon codicon-ellipsis"></span></span></div>
+  <iframe src="sidebar.html" title="Herdr Cockpit sidebar"></iframe>
+</div>
+<div class="notes">
+  <div class="note"><h3><span class="codicon codicon-pulse"></span>Every agent at a glance</h3><p>Counters for blocked, done and working agents across all your spaces. Click one to jump to the agent that needs you.</p></div>
+  <div class="note"><h3><span class="codicon codicon-graph"></span>Usage across agents</h3><p>Claude Code, Codex and Kiro plan limits side by side: 5-hour and weekly windows with reset times, session tokens and Kiro credits.</p></div>
+  <div class="note"><h3><span class="codicon codicon-bell"></span>Needs you</h3><p>Agents waiting for an answer or finished, with the end of their screen, so you see the question before you open the tab.</p></div>
+  <div class="note"><h3><span class="codicon codicon-git-branch"></span>Spaces with their git state</h3><p>Branch, staged and changed files, a one-click Review of the diffs, and each space's agents and shells. Click a space to open its folder and every pane as a tab.</p></div>
+</div>
+</body></html>

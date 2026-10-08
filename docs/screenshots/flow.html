@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!-- README image: from Herdr in a terminal to the same space in VS Code. The terminal shows the real Herdr TUI of
+     a demo session (captured from a pty); the VS Code window is vscode.html's image. -->
+<html lang="en"><head><meta charset="utf-8">
+<link href="../../media/codicons/codicon.css" rel="stylesheet">
+<link href="theme.css" rel="stylesheet">
+<link href="chrome.css" rel="stylesheet">
+<style>
+  body.flow { margin: 0; width: 100vw; height: 100vh; overflow: hidden; position: relative; background: linear-gradient(135deg, #1b2335 0%, #2a1f3d 100%); font-family: var(--vscode-font-family); }
+  .row { position: absolute; left: 32px; right: 32px; top: 92px; display: flex; align-items: center; gap: 22px; }
+  .terminal { flex: none; width: 560px; border-radius: 10px; overflow: hidden; background: #101010; box-shadow: 0 24px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.08); }
+  .terminal .titlebar { background: #232323; border-bottom: 1px solid #333; }
+  .terminal .tui { padding: 6px 8px 8px; }
+  .terminal .tui pre { margin: 0; }
+  .terminal .tui pre > div { font-family: Menlo, monospace !important; font-size: 9px !important; line-height: 1.34 !important; }
+  .arrow { flex: none; color: #9fc3ff; font-size: 40px; }
+  .arrow .codicon { font-size: 40px; }
+  .vscode { flex: none; width: 882px; height: 529px; border-radius: 10px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08); }
+  .vscode iframe { width: 1520px; height: 912px; border: 0; transform: scale(0.58); transform-origin: 0 0; }
+  .callout { position: absolute; left: 0; right: 0; top: 26px; margin: auto; width: max-content; display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 12px; background: #0b5cad; color: #fff; font-size: 16px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  .callout kbd { display: inline-block; min-width: 18px; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35); font: 600 14px var(--vscode-font-family); text-align: center; }
+  .callout .codicon { font-size: 18px; }
+  .labels { position: absolute; left: 32px; right: 32px; bottom: 26px; display: flex; gap: 22px; color: #c9d1e3; font-size: 15px; }
+  .labels div:first-child { width: 560px; }
+  .labels div:last-child { margin-left: 62px; }
+  .labels b { color: #fff; }
+</style>
+</head><body class="flow">
+<div class="callout">Herdr Cockpit plugin: <kbd>ctrl</kbd>+<kbd>b</kbd> <kbd>⇧</kbd>+<kbd>E</kbd> Open in editor</div>
+<div class="row">
+  <div class="terminal"><div class="titlebar"><span class="lights"><i></i><i></i><i></i></span><span class="title">herdr — api-service</span></div><div class="tui" id="tui"></div></div>
+  <div class="arrow"><span class="codicon codicon-arrow-right"></span></div>
+  <div class="vscode"><iframe src="vscode.html?bare" title="VS Code with Herdr Cockpit"></iframe></div>
+</div>
+<div class="labels"><div><b>Herdr in your terminal</b>: spaces, agents, panes</div><div><b>The same space in VS Code</b>: files, git, diffs and the agents as tabs</div></div>
+<script src="build/fragments.js"></script>
+<script>document.getElementById('tui').innerHTML = window.DEMO_TUI;</script>
+</body></html>
