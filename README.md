@@ -51,6 +51,14 @@ The **Get started with Herdr Cockpit** walkthrough covers the same steps (Comman
 
 **Can't see the sidebar?** In Cursor the activity bar is a row of icons across the top of the sidebar, and Herdr Cockpit may be behind the **⌄** arrow at its end. The Command Palette always works: **Herdr Cockpit: Focus on Spaces & Agents View**.
 
+## Windows connection compatibility
+
+The socket client also supports Windows Herdr 0.9.3 (protocol 22). API requests and event subscriptions use Windows named pipes; the logical socket path defaults to `%APPDATA%/herdr/herdr.sock`, or `%APPDATA%/herdr/sessions/<name>/herdr.sock` for a named session. The Unix socket behavior on macOS/Linux is unchanged.
+
+If configuring Windows paths, set `herdr.binaryPath` to the full `herdr.exe` path (not its directory), and use the logical socket file path for `herdr.socketPath`, without a `\\.\pipe\` prefix. In JSON settings, escape backslashes or use forward slashes. Reload the window after installing an updated VSIX.
+
+This is connection compatibility, not a claim of complete Windows support: session snapshots, event subscriptions and the VS Code sidebar have been verified locally with Herdr 0.9.3. The POSIX companion plugin and the full feature set have not been validated on Windows. The existing full test suite uses Unix shell fixtures; the standalone transport regression test can also be run on Windows with `npm run compile` followed by `node out/test/transportTest.js`.
+
 ## The Herdr plugin
 
 Working in Herdr's terminal? The companion plugin jumps from Herdr to the editor:
