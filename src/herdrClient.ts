@@ -1,5 +1,5 @@
 // Minimal Herdr socket API client. No vscode imports, so it can be tested standalone.
-// Protocol: newline-delimited JSON over a Unix socket. One request per line,
+// Protocol: newline-delimited JSON over a Unix socket or Windows named pipe. One request per line,
 // responses echo the request id. events.subscribe keeps the connection open.
 import * as net from 'net';
 import * as os from 'os';
@@ -24,9 +24,18 @@ function expandHome(p: string): string {
 export function resolveSocketPath(override?: string, session?: string): string {
   if (override) return expandHome(override);
   if (process.env.HERDR_SOCKET_PATH) return process.env.HERDR_SOCKET_PATH;
-  const base = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'herdr');
+  const configHome = process.platform === 'win32'
+    ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
+    : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  const base = path.join(configHome, 'herdr');
   const s = session || process.env.HERDR_SESSION;
   return s ? path.join(base, 'sessions', s, 'herdr.sock') : path.join(base, 'herdr.sock');
+}
+
+/** Windows Herdr names its pipe after the full logical socket path. CLI commands still use that path. */
+export function transportPath(socket: string, platform: NodeJS.Platform = process.platform): string {
+  if (platform !== 'win32' || socket.startsWith('\\\\.\\pipe\\')) return socket;
+  return '\\\\.\\pipe\\' + path.win32.normalize(socket);
 }
 
 let seq = 0;
@@ -58,7 +67,7 @@ export class HerdrClient {
   request<T = any>(method: string, params: object = {}, timeoutMs = 5000): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const id = nextId('req');
-      const sock = net.createConnection(this.socketPath());
+      const sock = net.createConnection(transportPath(this.socketPath()));
       sock.setEncoding('utf8');
       let settled = false;
       const finish = (err?: Error, val?: any) => {
@@ -90,7 +99,7 @@ export class HerdrClient {
    */
   subscribe(subscriptions: readonly EventSubscription[], onEvent: (ev: any) => void, onEnd: (err?: Error) => void): Subscription {
     const id = nextId('sub');
-    const sock = net.createConnection(this.socketPath());
+    const sock = net.createConnection(transportPath(this.socketPath()));
     sock.setEncoding('utf8');
     let ended = false;
     let acked = false;

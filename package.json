@@ -345,7 +345,7 @@
         "herdr.socketPath": {
           "type": "string",
           "default": "",
-          "description": "Herdr socket path. Empty = HERDR_SOCKET_PATH, then ~/.config/herdr/herdr.sock. Machine setting: ignored in workspace and folder settings.",
+          "description": "Herdr socket path. Empty = HERDR_SOCKET_PATH, then %APPDATA%/herdr/herdr.sock on Windows or ~/.config/herdr/herdr.sock on macOS/Linux. Use the logical socket file path, not a named-pipe prefix. Machine setting: ignored in workspace and folder settings.",
           "scope": "machine"
         },
         "herdr.startServer": {
@@ -605,7 +605,7 @@
     "gen:icons": "node scripts/gen-agent-icons.mjs",
     "codicons": "node scripts/copy-codicons.mjs",
     "pretest": "tsc -p .",
-    "test": "node out/test/mockTest.js && node out/test/viewTest.js && node out/test/usageTest.js && node out/test/connectionTest.js && node out/test/hubTest.js && node out/test/pluginTest.js && node out/test/streamTest.js && node out/test/gitTest.js",
+    "test": "node out/test/transportTest.js && node out/test/mockTest.js && node out/test/viewTest.js && node out/test/usageTest.js && node out/test/connectionTest.js && node out/test/hubTest.js && node out/test/pluginTest.js && node out/test/streamTest.js && node out/test/gitTest.js",
     "package": "npm run codicons && tsc -p . && vsce package",
     "install-local": "npm run package && code --install-extension herdr-cockpit-$npm_package_version.vsix --force",
     "lint": "eslint --no-warn-ignored src media/*.js scripts",
