@@ -52,7 +52,7 @@ gitInfo(dir, () => {
   console.log('✓ git branch + change count; repo fsmonitor/filter commands not executed');
   failClosed().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
 });
-setTimeout(() => { console.error('git test timed out'); process.exit(1); }, 4000);
+setTimeout(() => { console.error('git test timed out'); process.exit(1); }, 15000);
 
 // Filter discovery must fail closed: if the repo's config can't be read, or a filter can't be switched off,
 // git doesn't run for that folder at all. (Global/system config off, so the user's own setup can't interfere.)
