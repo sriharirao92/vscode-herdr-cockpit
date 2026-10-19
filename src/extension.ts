@@ -12,8 +12,10 @@ import { agentLogo } from './agentLogos';
 import { gitInfo } from './gitInfo';
 import { isMounted, mountSpace, unmountSpace } from './folders';
 import { AttachTerminals, TerminalLocationSetting } from './terminals';
+import { TabAction } from './builtinTerminal';
+import { findFileRefs } from './termLinks';
 import { backoffDelay, binaryFound, diagnose, Diagnosis, DownReason, herdrEnv, resolveBinary, serverStatus, sessionOfSocket, startServer } from './connection';
-import { editorCli, ensureHubWorkspace, hubDir, hubOpen, hubWorkspaceFile, HubStatus, isInsideRoots, legacyHubWorkspaceFile, OfferHubSetting, shouldOfferHub, LINK_VERSION, LinkRequest, parseLink, removeHubStatus, takePendingLink, writeEditorRecord, writeHubStatus, writePendingLink } from './hubFiles';
+import { claimant, editorCli, ensureHubWorkspace, hubDir, hubOpen, hubWorkspaceFile, HubStatus, isInsideRoots, legacyHubWorkspaceFile, OfferHubSetting, pruneClaims, readClaim, removeClaim, writeClaim, shouldOfferHub, LINK_VERSION, LinkRequest, parseLink, removeHubStatus, takePendingLink, writeEditorRecord, writeHubStatus, writePendingLink } from './hubFiles';
 import { HERDR_PROTOCOL } from './herdrTypes';
 import { reviewChanges } from './review';
 import { showHelp } from './help';
@@ -117,6 +119,12 @@ export function activate(ctx: vscode.ExtensionContext) {
       binary: () => resolveBinary(cfg().get<string>('binaryPath')),
       env: () => herdrEnvNow(),
       log: (line) => log.appendLine(line),
+      // Herdr doesn't say who took a pane over: windows record the panes they take (hubFiles.ts, claims).
+      claim: (paneId) => writeClaim(socketPath(), paneId, { editor: vscode.env.appName, scheme: vscode.env.uriScheme, pid: process.pid, at: Date.now() }),
+      unclaim: (paneId) => removeClaim(socketPath(), paneId, process.pid),
+      holder: (paneId, since) => claimant(readClaim(socketPath(), paneId), { scheme: vscode.env.uriScheme, pid: process.pid }, since),
+      onTakenOver: (paneId, who, expected) => !expected && tookOver(paneId, who),
+      request: (method, params, timeoutMs) => client.request(method, params, timeoutMs),
     },
     (paneId) => void closedTabByUser(paneId).catch((e) => log.appendLine(`close in Herdr: ${e?.message ?? e}`)),
     (paneId, name) => void renamedTabByUser(paneId, name).catch((e) => log.appendLine(`rename in Herdr: ${e?.message ?? e}`)),
@@ -433,6 +441,19 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   // ---------- sidebar ----------
+  /** When each space (by name: ids change across Herdr restarts) was last active, kept across reloads. */
+  const ACTIVITY_KEY = 'herdr.spaceActivity';
+  const spaceActivity = new Map<string, number>(Object.entries(ctx.globalState.get<Record<string, number>>(ACTIVITY_KEY, {})));
+  let activitySave: NodeJS.Timeout | undefined;
+  function touchSpace(label: string) {
+    spaceActivity.set(label, Date.now());
+    clearTimeout(activitySave);
+    activitySave = setTimeout(() => {
+      const keep = [...spaceActivity].sort((a, b) => b[1] - a[1]).slice(0, 200);
+      void ctx.globalState.update(ACTIVITY_KEY, Object.fromEntries(keep));
+    }, 2000);
+  }
+
   function render() {
     scheduleHubStatus();
     panel.update(
@@ -446,6 +467,10 @@ export function activate(ctx: vscode.ExtensionContext) {
         activity: (id) => activity.get(id),
         usage,
         connection: { ...(conn as object), kind: conn.kind, expectedProtocol: HERDR_PROTOCOL } as ViewConnection,
+        order: cfg().get<'activity' | 'herdr'>('spaceOrder', 'activity'),
+        lastActive: (sp) => spaceActivity.get(sp.label),
+        // In the sidebar itself: the secondary sidebar shows a single view as a tab and drops its description.
+        versions: { cockpit: String(ctx.extension.packageJSON.version), herdr: conn.kind === 'connected' ? (conn.version ?? undefined) : undefined },
       }),
     );
   }
@@ -519,11 +544,17 @@ export function activate(ctx: vscode.ExtensionContext) {
       for (const a of sp.agents) {
         nextStatus.set(a.id, a.status);
         const seen = stateSince.get(a.id);
-        if (!seen || seen.status !== a.status) stateSince.set(a.id, { status: a.status, at: Date.now() });
+        if (!seen || seen.status !== a.status) {
+          stateSince.set(a.id, { status: a.status, at: Date.now() });
+          if (!firstLoad) touchSpace(sp.label); // an agent started, finished, needs you
+        }
         const before = lastStatus.get(a.id);
         if (!firstLoad && before && a.status && before !== a.status && notifyOn.has(a.status)) notify(sp, a);
       }
     lastStatus = nextStatus;
+    // Focused in Herdr or switched to here: recently used.
+    const inFocus = next.spaces.find((s) => s.focused);
+    if (inFocus && (firstLoad ? !spaceActivity.has(inFocus.label) : prev?.spaces.find((s) => s.focused)?.id !== inFocus.id)) touchSpace(inFocus.label);
     for (const id of [...stateSince.keys()]) if (!nextStatus.has(id)) stateSince.delete(id);
 
     // Detach VS Code terminals for panes that no longer exist.
@@ -681,13 +712,44 @@ export function activate(ctx: vscode.ExtensionContext) {
         // Every pane gets its own tab: agents (most urgent first), then shells in Herdr's tab order.
         // Tabs appear in the order they're opened (editor and panel alike): open all, then focus the first.
         const panes = attachOrder(space, cfg().get<boolean>('autoAttachShells', true));
-        for (const p of panes) terms.attach(p, { preserveFocus: true });
-        if (panes[0]) terms.attach(panes[0]);
+        // Following Herdr, a pane another editor's Cockpit window has stays with it (shown read-only here).
+        const polite = !!opts.fromHerdr;
+        for (const p of panes) terms.attach(p, { preserveFocus: true, polite });
+        if (panes[0]) terms.attach(panes[0], { polite });
       }
     } finally {
       switching = false;
     }
     return true;
+  }
+
+  // ---------- another client took a pane over ----------
+  // The tabs keep showing their panes read-only (builtinTerminal.ts). Say so once for the panes lost together
+  // (a space switch in another window takes all of them).
+  const takenOver = new Map<string, string | undefined>();
+  let takenOverTimer: NodeJS.Timeout | undefined;
+  function tookOver(paneId: string, who: string | undefined) {
+    if (!cfg().get<boolean>('notifyOnTakeover', true)) return;
+    takenOver.set(paneId, who);
+    clearTimeout(takenOverTimer);
+    takenOverTimer = setTimeout(() => void showTakenOver(), 600);
+  }
+  async function showTakenOver() {
+    const lost = [...takenOver];
+    takenOver.clear();
+    if (!lost.length) return;
+    const whos = [...new Set(lost.map(([, w]) => w ?? 'another Herdr client'))];
+    const who = whos.length === 1 ? whos[0] : 'other Herdr clients';
+    const names = lost.map(([paneId]) => terms.nameOf(paneId) ?? paneId);
+    const list = names.length === 1 ? names[0] : names.length <= 3 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+    const one = names.length === 1;
+    const pick = await vscode.window.showWarningMessage(
+      `${who[0].toUpperCase()}${who.slice(1)} took over the Herdr ${one ? 'pane' : 'panes'} ${list}. ${one ? 'Its tab shows it' : 'Their tabs show them'} read-only here; type in a tab to take it back.`,
+      'Take Back',
+      "Don't Show Again",
+    );
+    if (pick === 'Take Back') terms.takeBack(lost.map(([paneId]) => paneId));
+    else if (pick === "Don't Show Again") await cfg().update('notifyOnTakeover', false, vscode.ConfigurationTarget.Global);
   }
 
   async function attachPane(space: Space, pane: Pane, startingAs?: string) {
@@ -1029,6 +1091,58 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (hit) await attachPane(sp, hit.pane);
   }
 
+  // ---------- the built-in tabs' own commands: find, scrolling the history, output, file links ----------
+
+  /** `herdr.terminalActive`: the focused terminal is a Herdr tab (its keybindings apply). */
+  const terminalContext = () => void vscode.commands.executeCommand('setContext', 'herdr.terminalActive', !!terms.ptyOf(vscode.window.activeTerminal));
+  const tabAction = (a: TabAction) => () => {
+    const pty = terms.ptyOf(vscode.window.activeTerminal);
+    if (pty) pty.action(a);
+    else void vscode.window.showInformationMessage('Focus a Herdr terminal tab first.');
+  };
+  /** Opening a file from a tab in the editor area puts it beside the tab, not over it. */
+  const besideTerminal = () => (vscode.window.tabGroups.activeTabGroup.activeTab?.input instanceof vscode.TabInputTerminal ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active);
+  type FileLink = vscode.TerminalLink & { uri: vscode.Uri; line?: number; col?: number };
+  ctx.subscriptions.push(
+    vscode.window.onDidChangeActiveTerminal(terminalContext),
+    vscode.window.onDidOpenTerminal(() => setTimeout(terminalContext, 200)), // adopted a moment after it opens
+    vscode.commands.registerCommand('herdr.terminal.find', tabAction('find')),
+    vscode.commands.registerCommand('herdr.terminal.findNext', tabAction('find-next')),
+    vscode.commands.registerCommand('herdr.terminal.findPrevious', tabAction('find-previous')),
+    vscode.commands.registerCommand('herdr.terminal.pageUp', tabAction('page-up')),
+    vscode.commands.registerCommand('herdr.terminal.pageDown', tabAction('page-down')),
+    vscode.commands.registerCommand('herdr.terminal.scrollToTop', tabAction('top')),
+    vscode.commands.registerCommand('herdr.terminal.scrollToBottom', tabAction('bottom')),
+    vscode.commands.registerCommand('herdr.terminal.openOutput', tabAction('output')),
+    vscode.window.registerTerminalLinkProvider({
+      // `src/foo.ts:42` printed in a pane, resolved against the pane's folder (the editor's own links don't know it).
+      async provideTerminalLinks(context) {
+        const at = terms.paneOf(context.terminal);
+        if (!at) return [];
+        const hit = paneOf({ paneId: at.paneId });
+        const bases = [...new Set([hit?.pane.cwd, hit?.space.cwd].filter((d): d is string => !!d))];
+        const links: FileLink[] = [];
+        for (const ref of findFileRefs(context.line).slice(0, 50)) {
+          const p = ref.path.startsWith('~/') ? path.join(os.homedir(), ref.path.slice(2)) : ref.path;
+          for (const base of path.isAbsolute(p) ? [''] : bases) {
+            const file = path.resolve(base, p);
+            const st = await fs.promises.stat(file).catch(() => undefined);
+            if (!st?.isFile()) continue;
+            links.push({ startIndex: ref.start, length: ref.length, tooltip: `Open ${ref.path}${ref.line ? ` at line ${ref.line}` : ''}`, uri: vscode.Uri.file(file), line: ref.line, col: ref.col });
+            break;
+          }
+        }
+        return links;
+      },
+      async handleTerminalLink(l) {
+        const link = l as FileLink;
+        const pos = new vscode.Position(Math.max(0, (link.line ?? 1) - 1), Math.max(0, (link.col ?? 1) - 1));
+        await vscode.window.showTextDocument(link.uri, { viewColumn: besideTerminal(), preview: false, ...(link.line && { selection: new vscode.Range(pos, pos) }) });
+      },
+    }),
+  );
+  terminalContext();
+
   ctx.subscriptions.push(
     vscode.window.registerUriHandler({ handleUri: (uri) => void handleLink(uri).catch((e) => log.appendLine(`link failed: ${e?.message ?? e}`)) }),
   );
@@ -1075,6 +1189,11 @@ export function activate(ctx: vscode.ExtensionContext) {
     });
   } catch (e: any) {
     log.appendLine(`could not write the editor record: ${e?.message ?? e}`);
+  }
+  try {
+    pruneClaims();
+  } catch {
+    // best effort
   }
 
   // The Cockpit window's state, for the plugin's status pane: written on change, plus a heartbeat.

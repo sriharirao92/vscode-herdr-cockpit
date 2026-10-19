@@ -3,6 +3,24 @@
 Herdr Cockpit (the editor extension) and its Herdr plugin (`plugin/`) are released together from this repository.
 Versions up to 0.1.2 were published as **Herdr Hub** (`sriharirao.herdr-hub`).
 
+## 0.2.6 (2026-10-19)
+
+- **A tab whose pane is taken over stays live.** Herdr lets one client control a pane. When another one takes it (a Cockpit window in another editor, `herdr attach`), the tab used to end with "the stream ended (terminal attach taken over)". Now it keeps showing the pane, read-only, with a note on its bottom row saying who has it ("Kiro is using this pane · type here to take it back"). The first key you press takes control back, without sending that key. Selecting and copying still work.
+- A notification says which panes another client took, with **Take Back** (`herdr.notifyOnTakeover`). Cockpit windows record the panes they take in `~/.herdr-cockpit/claims`, since Herdr doesn't say who has a pane; other clients show as "another Herdr client".
+- Cockpit windows in several editors can follow Herdr together: following a space switch, a pane another window already has stays with it and shows read-only, instead of the windows taking panes from each other.
+
+- **Delete selected text.** Select part of the line you're typing in a terminal tab (a shell command, or the input of Claude Code or Codex) and press Backspace or Delete to erase it. One line at a time.
+- **Selecting scrolls.** Drag past the top or bottom of a terminal tab and it scrolls the pane's scrollback, selecting as it goes (faster the longer you hold), for as long as you hold it there. It also works in full-screen programs that scroll themselves (less, an agent's transcript). The copied text includes the rows that scrolled away.
+
+- **Find in the whole history** (⌘F / Ctrl+F in a Herdr tab). Searches everything Herdr keeps for the pane, not just the screen: a bar with the count, every match highlighted, Enter / ↑ for older and ↓ for newer (⌘G / ⇧⌘G, F3 / Shift+F3), each one scrolled to the middle. Tab lists every matching line to filter and jump. Smart case, `/regex/`.
+- **Typing replaces a selection** on the line you're typing; **Option+click** moves the cursor there; **Shift+click** extends a selection.
+- **Scroll the history from the keyboard**: Shift+PageUp / PageDown, ⌘Home / ⌘End (Ctrl+Home / End).
+- **Open Terminal Output in Editor**: the pane's whole history as a document (right-click in the tab, or the Command Palette).
+- **⌘+click a file path** printed in a pane (`src/app.ts:42`) to open it at that line, beside the tab; paths resolve from the pane's folder.
+
+- **Busy and recent spaces first.** The sidebar puts spaces with an agent working or waiting on you at the top, then the most recently active ones (an agent changed state, or you switched to the space). Remembered across reloads; `herdr.spaceOrder` = `herdr` keeps Herdr's order.
+- The bottom of the sidebar shows the versions: **Herdr Cockpit v0.2.6 · Herdr 0.9.3**.
+
 ## 0.2.1 (2026-10-08)
 
 - README and store page: images of moving from Herdr's terminal to the same space in VS Code with the plugin, the Cockpit window, and the sidebar (from a demo session; `docs/screenshots/render.sh` rebuilds them).

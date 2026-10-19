@@ -6,11 +6,13 @@
 //   editors/<scheme>.json      one per editor the extension has run in: how the plugin finds its command line
 //   status/<scheme>.json       the Cockpit window's live state, for the plugin's status pane
 //   pending-link.json          a link that reached another window, handed to the Cockpit window
+//   claims/<hash>.json         which editor window last took control of a pane (Herdr doesn't say who has it)
 //
 // Links: <scheme>://<publisher>.herdr-cockpit/<action>?<query>, where <scheme> is the editor's (vscode, cursor,
 // kiro, positron, ...). Every field is validated here: a link can come from any web page, so it may only
 // pick things the user already has (a space, a pane, a file), never a program or a setting. A file outside
 // the user's spaces and open folders needs a confirmation (isInsideRoots); network paths are refused.
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -157,6 +159,77 @@ export function removeHubStatus(scheme: string, pid: number, home?: string) {
   if (!SCHEME.test(scheme)) return;
   const f = statusFile(scheme, home);
   if (readJson(f)?.pid === pid) fs.rmSync(f, { force: true });
+}
+
+// ---------- pane claims ----------
+// Herdr lets one client control a pane and tells the one it replaces only "taken over". So each window
+// records the panes it takes control of, and the window that lost one can say who has it now ("Kiro").
+
+export interface PaneClaim {
+  /** Editor display name, e.g. "Kiro". */
+  editor: string;
+  scheme: string;
+  /** Extension host process of the window that took the pane. */
+  pid: number;
+  /** ms since epoch. */
+  at: number;
+}
+
+/** One file per pane of a Herdr session (its socket): pane ids repeat across sessions. */
+const claimFile = (socket: string, pane: string, home?: string) =>
+  path.join(hubDir(home), 'claims', crypto.createHash('sha256').update(`${socket}\n${pane}`).digest('hex').slice(0, 24) + '.json');
+
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e: any) {
+    return e?.code === 'EPERM';
+  }
+};
+
+export function writeClaim(socket: string, pane: string, claim: PaneClaim, home?: string) {
+  try {
+    writeJson(claimFile(socket, pane, home), claim);
+  } catch {
+    // best effort: without it the other window just can't name us
+  }
+}
+
+export function readClaim(socket: string, pane: string, home?: string): PaneClaim | undefined {
+  const c = readJson(claimFile(socket, pane, home));
+  if (typeof c?.editor !== 'string' || typeof c?.scheme !== 'string' || typeof c?.pid !== 'number' || typeof c?.at !== 'number') return undefined;
+  return { editor: c.editor.slice(0, 80), scheme: c.scheme, pid: c.pid, at: c.at };
+}
+
+/** Drop this window's claim (it released the pane, or lost it); another window's newer claim stays. */
+export function removeClaim(socket: string, pane: string, pid: number, home?: string) {
+  const f = claimFile(socket, pane, home);
+  if (readJson(f)?.pid === pid) fs.rmSync(f, { force: true });
+}
+
+/** Remove claims whose window is gone (they'd only pile up: windows that quit can't remove their own). */
+export function pruneClaims(home?: string, isAlive = alive) {
+  const dir = path.join(hubDir(home), 'claims');
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(dir).filter((n) => n.endsWith('.json'));
+  } catch {
+    return;
+  }
+  for (const n of names) {
+    const c = readJson(path.join(dir, n));
+    if (typeof c?.pid !== 'number' || !isAlive(c.pid)) fs.rmSync(path.join(dir, n), { force: true });
+  }
+}
+
+/**
+ * Who has the pane, from this window's point of view: another live window's claim. `since` = when this window
+ * took the pane: a claim older than that is from before (that window lost the pane to us since).
+ */
+export function claimant(c: PaneClaim | undefined, me: { scheme: string; pid: number }, since = 0, isAlive = alive): string | undefined {
+  if (!c || c.pid === me.pid || c.at < since || !isAlive(c.pid)) return undefined;
+  return c.scheme === me.scheme ? `another ${c.editor} window` : c.editor;
 }
 
 // ---------- links ----------

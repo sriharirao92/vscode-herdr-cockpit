@@ -13,6 +13,10 @@ import { resolveBinary } from '../../connection';
 
 const SESSION = 'hb-vsc';
 
+// Run from a Herdr pane, the environment points at that (the user's) session: HERDR_SOCKET_PATH wins over
+// HERDR_SESSION, so the test would create its spaces there and `server stop` would stop it (happened once).
+for (const k of ['HERDR_SOCKET_PATH', 'HERDR_SESSION', 'HERDR_PANE_ID', 'HERDR_TAB_ID', 'HERDR_WORKSPACE_ID', 'HERDR_ENV']) delete process.env[k];
+
 function herdr(bin: string, ...args: string[]): any {
   const out = execFileSync(bin, args, { env: { ...process.env, HERDR_SESSION: SESSION }, encoding: 'utf8' });
   try {
@@ -47,6 +51,7 @@ async function main() {
   }
   const socket = status().socket as string;
   if (!socket) throw new Error('could not start the hb-vsc Herdr session');
+  if (!socket.includes(path.join('sessions', SESSION, ''))) throw new Error(`refusing to test against ${socket}: not the ${SESSION} session's socket`);
   const spaces = spaceDirs.map((cwd, i) => herdr(bin, 'workspace', 'create', '--cwd', cwd, '--label', `vsc-int-${i + 1}`).result.workspace.workspace_id as string);
 
   // The hub workspace and user settings of the test editor.

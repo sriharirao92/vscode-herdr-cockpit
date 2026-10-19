@@ -6,7 +6,7 @@ import * as assert from 'assert';
 import { describeProcess, isShellProcess, summarizeAgent, summarizeShell } from '../activity';
 import * as vm from 'vm';
 import { attachOrder, normalize } from '../model';
-import { buildViewState, headline, paneName } from '../viewState';
+import { buildViewState, headline, orderByActivity, paneName } from '../viewState';
 import type { PaneActivity } from '../activity';
 import type { PaneProcessInfo, SessionSnapshotResult } from '../herdrTypes';
 
@@ -121,4 +121,10 @@ for (const k of ['claude', 'codex', 'kiro', 'cursor', 'copilot', 'gemini', 'open
   assert.match(logos[k] ?? '', /^<svg class="agent-logo"/, `logo for ${k}`);
 assert.ok(Object.values(logos).every((s) => !/<script|\son[a-z]+=|style=/i.test(s)), 'logos are inert');
 console.log('✓ agent logos');
+// Space order: busy (an agent working or waiting on you) first, then the most recently active, then Herdr's order.
+const space = (id: string, statuses: string[]) => ({ id, label: id, agents: statuses.map((status) => ({ status })) }) as any;
+const at: Record<string, number> = { a: 5, b: 9, c: 1, d: 3 };
+const ordered = orderByActivity([space('a', ['idle']), space('b', []), space('c', ['working']), space('d', ['blocked', 'idle']), space('e', ['done']), space('f', [])], (s) => at[s.id]);
+assert.deepStrictEqual(ordered.map((s) => s.id), ['d', 'c', 'b', 'a', 'e', 'f']);
+console.log('✓ space order: working / blocked first, then most recently active, then Herdr order');
 console.log('\nview tests passed');

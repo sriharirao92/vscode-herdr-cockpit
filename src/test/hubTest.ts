@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  claimant,
   editorCli,
   ensureHubWorkspace,
   hubWorkspaceFile,
@@ -11,11 +12,15 @@ import {
   LINK_VERSION,
   isInsideRoots,
   parseLink,
+  pruneClaims,
+  readClaim,
   readEditorRecords,
+  removeClaim,
   removeHubStatus,
   hubOpen,
   shouldOfferHub,
   takePendingLink,
+  writeClaim,
   writeEditorRecord,
   writeHubStatus,
   writePendingLink,
@@ -121,6 +126,36 @@ assert.strictEqual(takePendingLink('cursor', 60_000, home), undefined, 'taken on
 writePendingLink('cursor', '/open', 'space=w1', home);
 assert.strictEqual(takePendingLink('cursor', -1, home), undefined, 'stale links are dropped');
 console.log('✓ link hand-off: per editor, taken once, stale dropped');
+
+// ---------- pane claims ----------
+const sock = '/run/herdr/a.sock';
+const me = { scheme: 'vscode', pid: 100 };
+const live = () => true;
+writeClaim(sock, 'w1:p1', { editor: 'Kiro', scheme: 'kiro', pid: 200, at: 5000 }, home);
+assert.deepStrictEqual(readClaim(sock, 'w1:p1', home), { editor: 'Kiro', scheme: 'kiro', pid: 200, at: 5000 });
+assert.strictEqual(readClaim('/run/herdr/b.sock', 'w1:p1', home), undefined, 'per session: pane ids repeat across sessions');
+assert.strictEqual(claimant(readClaim(sock, 'w1:p1', home), me, 4000, live), 'Kiro', 'took it after we did');
+assert.strictEqual(claimant(readClaim(sock, 'w1:p1', home), me, 6000, live), undefined, 'a claim from before we took it: not who took it');
+assert.strictEqual(claimant(readClaim(sock, 'w1:p1', home), me, 0, () => false), undefined, 'its window is gone');
+assert.strictEqual(claimant({ editor: 'Visual Studio Code', scheme: 'vscode', pid: 300, at: 1 }, me, 0, live), 'another Visual Studio Code window');
+assert.strictEqual(claimant({ editor: 'Visual Studio Code', scheme: 'vscode', pid: 100, at: 1 }, me, 0, live), undefined, 'our own claim');
+assert.strictEqual(claimant(undefined, me, 0, live), undefined);
+removeClaim(sock, 'w1:p1', 100, home);
+assert.ok(readClaim(sock, 'w1:p1', home), "another window's claim is kept");
+removeClaim(sock, 'w1:p1', 200, home);
+assert.strictEqual(readClaim(sock, 'w1:p1', home), undefined, 'its own window removes it');
+fs.mkdirSync(path.join(home, '.herdr-cockpit', 'claims'), { recursive: true });
+writeClaim(sock, 'w1:p2', { editor: 'Kiro', scheme: 'kiro', pid: 200, at: 1 }, home);
+const [cf] = fs.readdirSync(path.join(home, '.herdr-cockpit', 'claims'));
+assert.match(cf, /^[0-9a-f]{24}\.json$/, 'file named by a hash: no pane id or socket path in it');
+fs.writeFileSync(path.join(home, '.herdr-cockpit', 'claims', cf), '{"editor":1}');
+assert.strictEqual(readClaim(sock, 'w1:p2', home), undefined, 'malformed claims are ignored');
+writeClaim(sock, 'w1:p3', { editor: 'Kiro', scheme: 'kiro', pid: 201, at: 1 }, home);
+writeClaim(sock, 'w1:p4', { editor: 'Cursor', scheme: 'cursor', pid: 202, at: 1 }, home);
+pruneClaims(home, (pid) => pid === 202);
+assert.deepStrictEqual([readClaim(sock, 'w1:p3', home), readClaim(sock, 'w1:p4', home)?.editor], [undefined, 'Cursor'], "gone windows' (and malformed) claims pruned");
+assert.strictEqual(fs.readdirSync(path.join(home, '.herdr-cockpit', 'claims')).length, 1);
+console.log('✓ pane claims: per session, who took it (newer than us, alive, not us), removed only by their owner');
 
 // ---------- tools ----------
 assert.strictEqual(toolDirs('/h', 'darwin')[0], '/opt/homebrew/bin');

@@ -91,6 +91,8 @@ export interface ViewState {
   spaces: SpaceView[];
   /** Plan usage of the coding agents with local data (Claude Code, Codex, Kiro). */
   usage: ProviderUsage[];
+  /** Shown at the bottom of the sidebar. */
+  versions?: { cockpit: string; herdr?: string };
 }
 
 export interface ViewInputs {
@@ -103,6 +105,22 @@ export interface ViewInputs {
   activity(paneId: string): PaneActivity | undefined;
   usage: ProviderUsage[];
   connection: ViewConnection;
+  /** `activity`: busy and recently active spaces first (orderByActivity); `herdr`: Herdr's order. */
+  order?: 'activity' | 'herdr';
+  /** When a space was last active (an agent changed state, it was focused), if known. */
+  lastActive?(space: Space): number | undefined;
+  versions?: { cockpit: string; herdr?: string };
+}
+
+/**
+ * Spaces with an agent working or waiting on you first, then the most recently active; ties keep Herdr's order.
+ */
+export function orderByActivity(spaces: Space[], lastActive: (s: Space) => number | undefined): Space[] {
+  const busy = (s: Space) => s.agents.some((a) => a.status === 'working' || a.status === 'blocked');
+  return spaces
+    .map((s, i) => ({ s, i, busy: busy(s), at: lastActive(s) ?? 0 }))
+    .sort((a, b) => Number(b.busy) - Number(a.busy) || b.at - a.at || a.i - b.i)
+    .map((x) => x.s);
 }
 
 const home = os.homedir();
@@ -209,7 +227,9 @@ function shellView(space: Space, tab: Tab | undefined, p: Pane, i: ViewInputs): 
 
 export function buildViewState(i: ViewInputs): ViewState {
   const totals = { ...emptyCounts(), agents: 0, shells: 0 };
-  const spaces: SpaceView[] = (i.model?.spaces ?? []).map((sp) => {
+  const all = i.model?.spaces ?? [];
+  const ordered = i.order === 'herdr' || !i.lastActive ? all : orderByActivity(all, i.lastActive);
+  const spaces: SpaceView[] = ordered.map((sp) => {
     const agents: PaneView[] = [];
     const shells: PaneView[] = [];
     for (const tab of sp.tabs)
@@ -239,5 +259,5 @@ export function buildViewState(i: ViewInputs): ViewState {
     .sort((a, b) => rank[a.status!]! - rank[b.status!]! || (a.since ?? 0) - (b.since ?? 0));
   // Usage only for the agents running in Herdr right now.
   const running = new Set(spaces.flatMap((s) => s.agents.map((a) => (a.agentKind ?? '').toLowerCase())));
-  return { connected: !!i.model, connection: i.connection, showShells: i.showShells, totals, attention, spaces, usage: i.usage.filter((u) => running.has(u.id)) };
+  return { connected: !!i.model, connection: i.connection, showShells: i.showShells, totals, attention, spaces, usage: i.usage.filter((u) => running.has(u.id)), versions: i.versions };
 }

@@ -3,7 +3,7 @@
 // Closing the tab only detaches; the process keeps running in Herdr.
 import * as vscode from 'vscode';
 import type { Pane } from './model';
-import { BuiltinDeps, HerdrPty } from './builtinTerminal';
+import { BuiltinDeps, HerdrPty, PtyOptions } from './builtinTerminal';
 
 export { resolveBinary } from './connection';
 
@@ -67,8 +67,23 @@ export class AttachTerminals implements vscode.Disposable {
   }
 
   /** A tab for a pane, drawn from Herdr's stream: the pane id, or how to create the pane once the tab opens. */
-  newPty(target: string | (() => Promise<string>)): HerdrPty {
-    return new HerdrPty(target, { ...this.deps, onEnded: () => this.onChange() });
+  newPty(target: string | (() => Promise<string>), opts?: PtyOptions): HerdrPty {
+    return new HerdrPty(target, { ...this.deps, onEnded: () => this.onChange() }, opts);
+  }
+
+  /** Take control back of tabs that show their pane read-only (another client has it); all of them by default. */
+  takeBack(paneIds?: readonly string[]) {
+    for (const [paneId, e] of this.byPane) if (!paneIds || paneIds.includes(paneId)) e.pty?.takeBack();
+  }
+
+  /** The tab's name, e.g. for a notification. */
+  nameOf(paneId: string): string | undefined {
+    return this.byPane.get(paneId)?.name;
+  }
+
+  /** The live built-in tab behind a terminal, if it's one of ours. */
+  ptyOf(term: vscode.Terminal | undefined): HerdrPty | undefined {
+    for (const e of this.byPane.values()) if (e.term === term && live(e)) return e.pty;
   }
 
   /** The pane (and space) a tab shows, if it's one of ours. */
@@ -133,9 +148,14 @@ export class AttachTerminals implements vscode.Disposable {
     return vscode.window.tabGroups.activeTabGroup?.viewColumn ?? vscode.ViewColumn.One;
   }
 
-  attach(pane: Pane, opts: { preserveFocus?: boolean; startingAs?: string } = {}): vscode.Terminal | undefined {
+  /**
+   * Open (or show) the pane's tab. You asked for it here, so a tab showing it read-only takes control back;
+   * `polite` (follow mode) leaves a pane another editor window has to that window and shows it read-only.
+   */
+  attach(pane: Pane, opts: { preserveFocus?: boolean; startingAs?: string; polite?: boolean } = {}): vscode.Terminal | undefined {
     const existing = this.byPane.get(pane.id);
     if (existing && live(existing)) {
+      if (!opts.polite) existing.pty?.takeBack();
       existing.term.show(opts.preserveFocus);
       return existing.term;
     }
@@ -149,7 +169,7 @@ export class AttachTerminals implements vscode.Disposable {
     const column = where === 'panel' ? undefined : where === 'editorSplit' ? (pane.isAgent ? vscode.ViewColumn.One : vscode.ViewColumn.Two) : this.editorColumn();
     const location = column === undefined ? vscode.TerminalLocation.Panel : { viewColumn: column, preserveFocus: !!opts.preserveFocus };
     const { name, iconPath } = this.look(pane, opts.startingAs);
-    const pty = this.newPty(pane.id);
+    const pty = this.newPty(pane.id, { polite: opts.polite });
     const term = vscode.window.createTerminal({ name, pty, iconPath, location, isTransient: true });
     this.byPane.set(pane.id, { term, spaceId: pane.workspaceId, pty, column, name, seen: name });
     if (where === 'editor' && column) this.lastColumn = column;

@@ -14,8 +14,20 @@
 //    and, since 0.9.2 (verified on 0.9.3), {"type":"terminal.mouse","action":"down"|"up"|"drag"|"move",
 //    "button":"left"|"right"|"middle","column":N,"row":N,"modifiers":shift 1|ctrl 2|alt 4}, which Herdr drops
 //    unless the program enabled mouse reporting.
-//  - One controller per terminal: --takeover replaces another one.
+//  - One controller per terminal: --takeover replaces another one, whose stream then closes with the reason
+//    "terminal attach taken over". Herdr doesn't say who took it (see hubFiles.ts, claims). Without
+//    --takeover a second controller is refused ("already has an attached client; retry with --takeover").
+//  - `herdr terminal session observe <target> --cols --rows` (verified on 0.9.3) streams the same frames
+//    read-only, next to a controller: drawn at the observer's own size, stdin commands ignored (so a resize
+//    means a new observer), and it keeps going when the controller releases. It closes with terminal.closed
+//    when the pane goes away.
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
+
+/** control: input, resize, scroll and mouse go to the pane (and it's taken over from whoever had it). observe: read-only. */
+export type StreamMode = 'control' | 'observe';
+
+/** The reason Herdr gives a controller whose pane another client took over. */
+export const isTakenOver = (reason?: string) => !!reason && /taken over/i.test(reason);
 
 export interface StreamHandlers {
   onFrame(bytes: Buffer, full: boolean): void;
@@ -29,8 +41,16 @@ export class HerdrStream {
   private closed = false;
   private stderr = '';
 
-  constructor(bin: string, target: string, size: { cols: number; rows: number }, env: NodeJS.ProcessEnv, private h: StreamHandlers) {
-    this.proc = spawn(bin, ['terminal', 'session', 'control', target, '--takeover', '--cols', String(size.cols), '--rows', String(size.rows)], { env });
+  constructor(
+    bin: string,
+    target: string,
+    size: { cols: number; rows: number },
+    env: NodeJS.ProcessEnv,
+    private h: StreamHandlers,
+    readonly mode: StreamMode = 'control',
+  ) {
+    const how = mode === 'observe' ? ['observe', target] : ['control', target, '--takeover'];
+    this.proc = spawn(bin, ['terminal', 'session', ...how, '--cols', String(size.cols), '--rows', String(size.rows)], { env });
     this.proc.stdout.setEncoding('utf8');
     this.proc.stdout.on('data', (d: string) => this.read(d));
     this.proc.stderr.on('data', (d: Buffer) => (this.stderr = (this.stderr + d.toString()).slice(-2000)));
@@ -58,7 +78,7 @@ export class HerdrStream {
   }
 
   private send(cmd: object) {
-    if (!this.closed && this.proc.stdin.writable) this.proc.stdin.write(JSON.stringify(cmd) + '\n');
+    if (this.mode === 'control' && !this.closed && this.proc.stdin.writable) this.proc.stdin.write(JSON.stringify(cmd) + '\n');
   }
 
   input(data: string | Buffer) {
@@ -77,9 +97,10 @@ export class HerdrStream {
     this.send({ type: 'terminal.mouse', action, button, column: Math.max(0, column), row: Math.max(0, row), ...(modifiers && { modifiers }) });
   }
 
-  /** Detach (the program keeps running in Herdr), then stop the process. */
+  /** Detach (the program keeps running in Herdr), then stop the process. An observer just stops. */
   release() {
     if (this.closed) return;
+    if (this.mode === 'observe') return void this.proc.kill();
     this.send({ type: 'terminal.release' });
     this.proc.stdin.end();
     setTimeout(() => this.proc.kill(), 1000).unref();

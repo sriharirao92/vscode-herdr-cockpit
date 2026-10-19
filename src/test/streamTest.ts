@@ -4,7 +4,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { HerdrStream } from '../herdrStream';
+import { HerdrStream, isTakenOver } from '../herdrStream';
 import { parseInput, Screen } from '../termScreen';
 
 (async () => {
@@ -41,6 +41,77 @@ import { parseInput, Screen } from '../termScreen';
   s.mouse({ x: 8, y: 1, release: true, motion: false }, 9200);
   assert.strictEqual(s.mouse({ x: 8, y: 1, release: false, motion: false }, 9350).copy, 'second line here', 'triple-click: the line');
   console.log('✓ selection: drag (both ways, across a wrap), click, double-click word, triple-click line');
+
+  // ---------- dragging past the edge scrolls (Herdr repaints the view one frame per scroll) ----------
+  const tall = new Screen(20, 5);
+  const view = (top: number) => `\x1b[2J\x1b[H${[0, 1, 2, 3, 4].map((i) => `L${top + i}`).join('\r\n')}`;
+  await tall.write(view(10));
+  tall.mouse({ x: 1, y: 3, release: false, motion: false }, 0);
+  tall.mouse({ x: 1, y: 2, release: false, motion: true }, 0);
+  assert.strictEqual(tall.edge(), undefined, 'not on an edge');
+  tall.mouse({ x: 0, y: 0, release: false, motion: true }, 0);
+  assert.strictEqual(tall.edge(), 'up', 'dragged onto the top row');
+  tall.scrollSent('up', 1);
+  assert.strictEqual(await tall.write(view(9)), 1, 'the view moved one line');
+  assert.deepStrictEqual(tall.rowsOf(), [0, 1, 2, 3, 4], 'the selection follows the pointer into the new row');
+  tall.scrollSent('up', 3);
+  assert.strictEqual(await tall.write('\x1b[1;1Hnoise'), undefined, 'a frame that is not the scroll keeps it waiting');
+  assert.strictEqual(await tall.write(view(6)), 3);
+  assert.strictEqual(tall.mouse({ x: 0, y: 0, release: true, motion: false }, 0).copy, 'L6\nL7\nL8\nL9\nL10\nL11\nL12\nL1', 'rows that scrolled out of view are still copied');
+  assert.ok(tall.paint([0]).includes('\x1b[0;7mL6'), 'the new top row is shown selected');
+  tall.scrollSent('up', 3);
+  assert.strictEqual(tall.scrollTimedOut(), 0, 'no frame: the top of the scrollback');
+  tall.mouse({ x: 0, y: 0, release: false, motion: false }, 5000);
+  tall.mouse({ x: 3, y: 0, release: false, motion: true }, 5000);
+  assert.strictEqual(tall.edge(), undefined, 'selecting along the top row itself does not scroll');
+  tall.mouse({ x: 3, y: 4, release: false, motion: true }, 5000);
+  assert.strictEqual(tall.edge(), 'down', 'dragged onto the bottom row');
+  tall.clearSelection();
+  // A full-screen program (less, an agent's transcript) gets the scroll instead: its own step, a fixed footer.
+  const pager = new Screen(20, 5);
+  const page = (top: number) => `\x1b[2J\x1b[H${[0, 1, 2, 3].map((i) => `P${top + i}`).join('\r\n')}\r\n:`;
+  await pager.write(page(50));
+  pager.mouse({ x: 0, y: 2, release: false, motion: false }, 0);
+  pager.mouse({ x: 0, y: 0, release: false, motion: true }, 0);
+  for (let top = 49; top >= 46; top--) {
+    pager.scrollSent('up', 3);
+    assert.strictEqual(await pager.write(`\x1b[5;1H:${top}`), undefined, 'a spinner-like frame keeps it waiting');
+    assert.strictEqual(await pager.write(page(top)), 1, 'the program moved one line, the footer stayed');
+  }
+  assert.strictEqual(pager.mouse({ x: 0, y: 0, release: true, motion: false }, 0).copy, 'P46\nP47\nP48\nP49\nP50\nP51\nP', 'the footer is not copied');
+  console.log('✓ selection: dragging onto the top/bottom row scrolls, the selection keeps rows that scrolled away');
+
+  // ---------- Backspace / Delete deletes a selection on the line being typed ----------
+  const select = (sc: Screen, a: number, b: number, y = 0) => {
+    sc.mouse({ x: a, y, release: false, motion: false }, 0);
+    sc.mouse({ x: b, y, release: false, motion: true }, 0);
+    sc.mouse({ x: b, y, release: true, motion: false }, 0);
+  };
+  const L = '\x1b[D';
+  const R = '\x1b[C';
+  const input = new Screen(30, 3);
+  await input.write('$ echo hello world'); // cursor at column 18
+  select(input, 7, 11); // "hello"
+  assert.strictEqual(input.deleteKeys(), L.repeat(6) + '\x7f'.repeat(5), 'move to the end of "hello", then 5 backspaces');
+  select(input, 13, 25); // "world" and the padding after it
+  assert.strictEqual(input.deleteKeys(), '\x7f'.repeat(5), 'padding past the input is not deleted');
+  await input.write('\x1b[1;3H'); // cursor on "echo"
+  select(input, 13, 17);
+  assert.strictEqual(input.deleteKeys(), R.repeat(16) + '\x7f'.repeat(5), 'a selection after the cursor: move right first');
+  select(input, 0, 3, 1);
+  assert.strictEqual(input.deleteKeys(), undefined, 'not the cursor row');
+  input.wheel('up');
+  select(input, 7, 11);
+  assert.strictEqual(input.deleteKeys(), undefined, 'scrolled back: the cursor row is not on screen');
+  input.inputSent();
+  assert.ok(input.deleteKeys(), 'typing returns Herdr to the live screen');
+  const wide = new Screen(30, 2);
+  await wide.write('$ 日本語 ok'); // 日 2-3, 本 4-5, 語 6-7, cursor 11
+  select(wide, 4, 5);
+  assert.strictEqual(wide.deleteKeys(), L.repeat(4) + '\x7f', 'wide characters count once');
+  select(wide, 3, 4);
+  assert.strictEqual(wide.deleteKeys(), L.repeat(4) + '\x7f\x7f', 'half of a wide character selects all of it');
+  console.log('✓ delete: arrows to the selection end + one backspace per character; only on the live cursor row');
 
   // ---------- painting ----------
   const colored = new Screen(10, 2);
@@ -117,8 +188,27 @@ process.stdin.on('data', (d) => {
   new HerdrStream(path.join(dir, 'missing'), 'w1:p1', { cols: 80, rows: 24 }, process.env, { onFrame: () => {}, onClose: (i) => (failed = i) });
   await until(() => !!failed);
   assert.ok(failed?.error, 'a missing herdr reports an error');
-  fs.rmSync(dir, { recursive: true, force: true });
   console.log('✓ stream client: argv, frames, input (UTF-8), resize, scroll, release, missing binary');
+
+  // Read-only: `observe`, no --takeover, and nothing is sent to it.
+  fs.rmSync(log, { force: true });
+  const oframes: string[] = [];
+  let oclosed: object | undefined;
+  const ob = new HerdrStream(fake, 'w1:p2', { cols: 100, rows: 30 }, process.env, { onFrame: (b) => oframes.push(b.toString()), onClose: (i) => (oclosed = i) }, 'observe');
+  await until(() => oframes.length === 1);
+  ob.input('x');
+  ob.resize(90, 20);
+  ob.scroll('up', 1);
+  ob.mouse('down', 'left', 1, 1);
+  await new Promise((r) => setTimeout(r, 200));
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'argv'), 'utf8'), 'terminal session observe w1:p2 --cols 100 --rows 30');
+  assert.ok(!fs.existsSync(log), 'an observer sends nothing');
+  ob.release();
+  await until(() => !!oclosed);
+  assert.ok(oclosed, 'release stops an observer');
+  assert.ok(isTakenOver('terminal attach taken over') && !isTakenOver('detached') && !isTakenOver(undefined));
+  fs.rmSync(dir, { recursive: true, force: true });
+  console.log('✓ observer: read-only argv, sends nothing, stops on release; taken-over reason recognized');
   console.log('\nstream tests passed');
 })().catch((e) => {
   console.error(e);
