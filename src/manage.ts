@@ -164,7 +164,7 @@ export async function newSpace(deps: ManageDeps) {
     });
     if (!branch?.trim()) return;
     label = branch.trim();
-    create = () => deps.actions.createWorktreeSpace({ workspace_id: from.id, cwd: from.cwd, branch: label, label });
+    create = () => deps.actions.createWorktreeSpace({ workspace_id: from.id, branch: label, label });
   }
 
   const what = await pickWhat(deps, `Start in "${label}"`);
